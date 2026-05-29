@@ -47,6 +47,8 @@ import type {
   CaptureSource,
   GenerationSettings,
   GenerationSettingsUpdate,
+  DownloadSettings,
+  DownloadSettingsUpdate,
   MCPClientBinding,
   MCPClientBindingListResponse,
   MCPClientBindingUpsert,
@@ -517,6 +519,17 @@ class ApiClient {
     });
   }
 
+  async getDownloadSettings(): Promise<DownloadSettings> {
+    return this.request<DownloadSettings>('/settings/downloads');
+  }
+
+  async updateDownloadSettings(patch: DownloadSettingsUpdate): Promise<DownloadSettings> {
+    return this.request<DownloadSettings>('/settings/downloads', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    });
+  }
+
   // MCP bindings — per-MCP-client voice/engine/personality mapping.
   async listMCPBindings(): Promise<MCPClientBindingListResponse> {
     return this.request<MCPClientBindingListResponse>('/mcp/bindings');
@@ -543,8 +556,8 @@ class ApiClient {
     return this.request<ModelStatusListResponse>('/models/status');
   }
 
-  async getModelsCacheDir(): Promise<{ path: string }> {
-    return this.request<{ path: string }>('/models/cache-dir');
+  async getModelsCacheDir(): Promise<{ path: string; source: string }> {
+    return this.request<{ path: string; source: string }>('/models/cache-dir');
   }
 
   async migrateModels(

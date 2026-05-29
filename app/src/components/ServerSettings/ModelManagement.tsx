@@ -44,7 +44,6 @@ import { apiClient } from '@/lib/api/client';
 import type { ActiveDownloadTask, HuggingFaceModelInfo, ModelStatus } from '@/lib/api/types';
 import { useModelDownloadToast } from '@/lib/hooks/useModelDownloadToast';
 import { usePlatform } from '@/platform/PlatformContext';
-import { useServerStore } from '@/stores/serverStore';
 
 async function fetchHuggingFaceModelInfo(repoId: string): Promise<HuggingFaceModelInfo> {
   const response = await fetch(`https://huggingface.co/api/models/${repoId}`);
@@ -130,17 +129,6 @@ export function ModelManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const platform = usePlatform();
-  const customModelsDir = useServerStore((state) => state.customModelsDir);
-  const setCustomModelsDir = useServerStore((state) => state.setCustomModelsDir);
-  const [migrating, setMigrating] = useState(false);
-  const [migrationProgress, setMigrationProgress] = useState<{
-    current: number;
-    total: number;
-    progress: number;
-    filename?: string;
-    status: string;
-  } | null>(null);
-  const [pendingMigrateDir, setPendingMigrateDir] = useState<string | null>(null);
   const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
   const [downloadingDisplayName, setDownloadingDisplayName] = useState<string | null>(null);
   const [consoleOpen, setConsoleOpen] = useState(false);
@@ -454,7 +442,9 @@ export function ModelManagement() {
         <div className="shrink-0 pb-4 border-b mb-4">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <span className="text-xs text-muted-foreground">{t('models.storage.location')}</span>
+              <span className="text-xs text-muted-foreground">
+                {t('models.storage.location')} · {cacheDir.source}
+              </span>
               <p
                 className="text-xs font-mono text-muted-foreground/70 truncate"
                 title={cacheDir.path}
@@ -478,47 +468,6 @@ export function ModelManagement() {
                 <FolderOpen className="h-3 w-3" />
                 {t('models.storage.open')}
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs text-muted-foreground h-7 px-2"
-                onClick={async () => {
-                  try {
-                    const newDir = await platform.filesystem.pickDirectory(
-                      t('models.storage.pickerTitle'),
-                    );
-                    if (!newDir) return;
-                    setPendingMigrateDir(newDir);
-                  } catch {
-                    toast({ title: t('models.toast.pickerFailed'), variant: 'destructive' });
-                  }
-                }}
-                disabled={migrating}
-              >
-                {migrating ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <FolderOpen className="h-3 w-3" />
-                )}
-                {migrating ? t('models.storage.migrating') : t('models.storage.change')}
-              </Button>
-              {customModelsDir && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs text-muted-foreground h-7 px-2"
-                  disabled={migrating}
-                  onClick={async () => {
-                    setCustomModelsDir(null);
-                    toast({ title: t('models.toast.resetToDefault') });
-                    await platform.lifecycle.restartServer('');
-                    queryClient.invalidateQueries();
-                  }}
-                >
-                  <RotateCcw className="h-3 w-3" />
-                  {t('models.storage.reset')}
-                </Button>
-              )}
             </div>
           </div>
         </div>
@@ -968,135 +917,6 @@ export function ModelManagement() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Migration confirmation dialog */}
-      <AlertDialog
-        open={!!pendingMigrateDir}
-        onOpenChange={(open) => !open && setPendingMigrateDir(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('models.migrateDialog.title')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('models.migrateDialog.description')}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <div
-            className="text-xs font-mono text-muted-foreground bg-muted/50 rounded px-3 py-2 truncate"
-            title={pendingMigrateDir ?? ''}
-          >
-            {pendingMigrateDir}
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => {
-                if (!pendingMigrateDir) return;
-                const newDir = pendingMigrateDir;
-                setPendingMigrateDir(null);
-                setMigrating(true);
-                setMigrationProgress({
-                  current: 0,
-                  total: 0,
-                  progress: 0,
-                  status: 'downloading',
-                  filename: t('models.migrateDialog.preparing'),
-                });
-                try {
-                  // Start the migration (background task)
-                  const migrationResult = await apiClient.migrateModels(newDir);
-
-                  // If no models to migrate, warn user and skip the change
-                  if (migrationResult.moved === 0) {
-                    setMigrating(false);
-                    setMigrationProgress(null);
-                    toast({
-                      title: t('models.toast.noModelsToMigrate'),
-                      description: t('models.toast.noModelsToMigrateDescription'),
-                    });
-                    setPendingMigrateDir(null);
-                    return;
-                  }
-
-                  // Connect to SSE for progress
-                  await new Promise<void>((resolve, reject) => {
-                    const es = new EventSource(apiClient.getMigrationProgressUrl());
-                    es.onmessage = (event) => {
-                      try {
-                        const data = JSON.parse(event.data);
-                        setMigrationProgress(data);
-                        if (data.status === 'complete') {
-                          es.close();
-                          resolve();
-                        } else if (data.status === 'error') {
-                          es.close();
-                          reject(new Error(data.error || t('models.toast.migrationFailed')));
-                        }
-                      } catch {
-                        /* ignore parse errors */
-                      }
-                    };
-                    es.onerror = () => {
-                      es.close();
-                      reject(new Error(t('models.toast.migrationConnectionLost')));
-                    };
-                  });
-
-                  setCustomModelsDir(newDir);
-                  setMigrationProgress({
-                    current: 1,
-                    total: 1,
-                    progress: 100,
-                    status: 'complete',
-                    filename: t('models.migrateDialog.restartingServer'),
-                  });
-                  await platform.lifecycle.restartServer(newDir);
-                  queryClient.invalidateQueries();
-                  toast({ title: t('models.toast.migrated') });
-                } catch (e) {
-                  toast({
-                    title: t('models.toast.migrationFailed'),
-                    description:
-                      e instanceof Error ? e.message : t('models.toast.migrationFailedGeneric'),
-                    variant: 'destructive',
-                  });
-                } finally {
-                  setMigrating(false);
-                  setMigrationProgress(null);
-                }
-              }}
-            >
-              {t('models.migrateDialog.action')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Migration progress overlay */}
-      {migrating && migrationProgress && (
-        <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center">
-          <div className="w-full max-w-md px-8 space-y-6 text-center">
-            <div className="space-y-2">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-              <h2 className="text-lg font-semibold">{t('models.migrate.title')}</h2>
-              <p className="text-sm text-muted-foreground">
-                {migrationProgress.status === 'complete'
-                  ? t('models.migrateDialog.restartingServer')
-                  : t('models.migrate.offline')}
-              </p>
-            </div>
-            {migrationProgress.total > 0 && (
-              <div className="space-y-2">
-                <Progress value={migrationProgress.progress} className="h-2" />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span className="truncate max-w-[60%]">{migrationProgress.filename}</span>
-                  <span>
-                    {formatBytes(migrationProgress.current)} /{' '}
-                    {formatBytes(migrationProgress.total)}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

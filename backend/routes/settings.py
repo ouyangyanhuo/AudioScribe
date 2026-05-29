@@ -34,3 +34,16 @@ async def update_generation_settings_endpoint(
     db: Session = Depends(get_db),
 ):
     return settings_service.update_generation_settings(db, patch.model_dump(exclude_unset=True))
+
+
+@router.get("/downloads", response_model=models.DownloadSettingsResponse)
+async def get_download_settings_endpoint(db: Session = Depends(get_db)):
+    return settings_service.get_download_settings(db)
+
+
+@router.put("/downloads", response_model=models.DownloadSettingsResponse)
+async def update_download_settings_endpoint(
+    patch: models.DownloadSettingsUpdate,
+    db: Session = Depends(get_db),
+):
+    return settings_service.update_download_settings(db, patch.model_dump(exclude_unset=True))

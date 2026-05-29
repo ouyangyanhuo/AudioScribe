@@ -36,6 +36,8 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+from . import config
+
 # AMD GPU environment variables must be set before torch import
 if not os.environ.get("HSA_OVERRIDE_GFX_VERSION"):
     os.environ["HSA_OVERRIDE_GFX_VERSION"] = "10.3.0"
@@ -47,7 +49,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from urllib.parse import quote
 
-from . import __version__, config, database
+from . import __version__, database
 from .services import tts, transcribe, llm
 from .database import get_db
 from .utils.platform_detect import get_backend_type
@@ -230,7 +232,10 @@ async def _run_startup(application: FastAPI) -> None:
     from .database.session import _db_path
 
     logger.info("Database: %s", _db_path)
+    logger.info("Install directory: %s", config.get_install_dir())
     logger.info("Data directory: %s", config.get_data_dir())
+    logger.info("Cache directory: %s", config.get_cache_root_dir())
+    logger.info("Model directory: %s", config.get_models_dir())
 
     init_queue()
 
@@ -283,13 +288,14 @@ async def _run_startup(application: FastAPI) -> None:
         logger.warning("Could not initialize progress manager event loop: %s", e)
 
     try:
-        from huggingface_hub import constants as hf_constants
+        from .services.model_sources import get_active_model_cache_dir, get_model_source
 
-        cache_dir = Path(hf_constants.HF_HUB_CACHE)
+        cache_dir = get_active_model_cache_dir()
         cache_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Model source: %s", get_model_source())
         logger.info("Model cache: %s", cache_dir)
     except Exception as e:
-        logger.warning("Could not create HuggingFace cache directory: %s", e)
+        logger.warning("Could not create model cache directory: %s", e)
 
     logger.info("Ready")
 

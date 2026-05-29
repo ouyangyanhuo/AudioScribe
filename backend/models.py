@@ -3,7 +3,7 @@ Pydantic models for request/response validation.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Literal, Optional, List
 from datetime import datetime
 
 from .utils.capture_chords import (
@@ -305,6 +305,23 @@ class GenerationSettingsUpdate(BaseModel):
     crossfade_ms: Optional[int] = Field(default=None, ge=0, le=500)
     normalize_audio: Optional[bool] = None
     autoplay_on_generate: Optional[bool] = None
+
+
+class DownloadSettingsResponse(BaseModel):
+    """Server-persisted download source preferences."""
+
+    model_source: Literal["huggingface", "modelscope"] = "huggingface"
+    github_mirror_enabled: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class DownloadSettingsUpdate(BaseModel):
+    """Partial update for download settings."""
+
+    model_source: Optional[Literal["huggingface", "modelscope"]] = None
+    github_mirror_enabled: Optional[bool] = None
 
 
 class MCPClientBindingResponse(BaseModel):

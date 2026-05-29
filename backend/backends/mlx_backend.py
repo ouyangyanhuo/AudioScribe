@@ -20,6 +20,7 @@ ensure_original_qwen_config_cached()
 from . import TTSBackend, STTBackend, LANGUAGE_CODE_TO_NAME, WHISPER_HF_REPOS
 from .base import is_model_cached, combine_voice_prompts as _combine_voice_prompts, model_load_progress
 from ..utils.cache import get_cache_key, get_cached_voice_prompt, cache_voice_prompt
+from ..services.model_sources import resolve_model_reference
 
 
 class MLXTTSBackend:
@@ -89,7 +90,7 @@ class MLXTTSBackend:
 
     def _load_model_sync(self, model_size: str):
         """Synchronous model loading."""
-        model_path = self._get_model_path(model_size)
+        model_path = resolve_model_reference(self._get_model_path(model_size))
         model_name = f"qwen-tts-{model_size}"
         is_cached = self._is_model_cached(model_size)
 
@@ -306,7 +307,7 @@ class MLXSTTBackend:
         with model_load_progress(progress_model_name, is_cached):
             from mlx_audio.stt import load
 
-            model_name = WHISPER_HF_REPOS.get(model_size, f"openai/whisper-{model_size}")
+            model_name = resolve_model_reference(WHISPER_HF_REPOS.get(model_size, f"openai/whisper-{model_size}"))
             logger.info("Loading MLX Whisper model %s...", model_size)
 
             self.model = load(model_name)

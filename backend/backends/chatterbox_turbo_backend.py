@@ -24,6 +24,7 @@ from .base import (
     model_load_progress,
     patch_chatterbox_f32,
 )
+from ..services.model_sources import resolve_model_reference
 
 logger = logging.getLogger(__name__)
 
@@ -84,11 +85,15 @@ class ChatterboxTurboTTSBackend:
             from huggingface_hub import snapshot_download
             from chatterbox.tts_turbo import ChatterboxTurboTTS
 
-            local_path = snapshot_download(
-                repo_id=CHATTERBOX_TURBO_HF_REPO,
-                token=None,
-                allow_patterns=["*.safetensors", "*.json", "*.txt", "*.pt", "*.model"],
-            )
+            model_ref = resolve_model_reference(CHATTERBOX_TURBO_HF_REPO)
+            if Path(model_ref).exists():
+                local_path = model_ref
+            else:
+                local_path = snapshot_download(
+                    repo_id=model_ref,
+                    token=None,
+                    allow_patterns=["*.safetensors", "*.json", "*.txt", "*.pt", "*.model"],
+                )
 
             if device == "cpu":
                 _orig_torch_load = torch.load

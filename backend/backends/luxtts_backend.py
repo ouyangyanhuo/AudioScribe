@@ -21,6 +21,7 @@ from .base import (
     model_load_progress,
 )
 from ..utils.cache import get_cache_key, get_cached_voice_prompt, cache_voice_prompt
+from ..services.model_sources import resolve_model_reference
 
 logger = logging.getLogger(__name__)
 
@@ -74,17 +75,19 @@ class LuxTTSBackend:
             device = self.device
             logger.info(f"Loading LuxTTS on {device}...")
 
+            model_path = resolve_model_reference(LUXTTS_HF_REPO)
+
             if device == "cpu":
                 import os
 
                 threads = os.cpu_count() or 4
                 self.model = LuxTTS(
-                    model_path=LUXTTS_HF_REPO,
+                    model_path=model_path,
                     device="cpu",
                     threads=min(threads, 8),
                 )
             else:
-                self.model = LuxTTS(model_path=LUXTTS_HF_REPO, device=device)
+                self.model = LuxTTS(model_path=model_path, device=device)
 
         logger.info("LuxTTS loaded successfully")
 

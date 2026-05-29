@@ -28,6 +28,7 @@ from .. import __version__
 logger = logging.getLogger(__name__)
 
 GITHUB_RELEASES_URL = "https://github.com/jamiepine/voicebox/releases/download"
+GITHUB_PROXY_BASE = "https://gh-proxy.com/"
 
 PROGRESS_KEY = "cuda-backend"
 
@@ -87,6 +88,19 @@ def get_installed_cuda_libs_version() -> Optional[str]:
     except Exception as e:
         logger.warning(f"Could not read cuda-libs.json: {e}")
         return None
+
+
+def build_github_download_url(url: str) -> str:
+    """Apply the fixed GitHub mirror proxy when enabled in settings."""
+    try:
+        from .settings import get_download_settings_snapshot
+
+        _model_source, mirror_enabled = get_download_settings_snapshot()
+    except Exception:
+        mirror_enabled = False
+    if not mirror_enabled:
+        return url
+    return f"{GITHUB_PROXY_BASE}{url}"
 
 
 def is_cuda_active() -> bool:
@@ -295,13 +309,13 @@ async def _download_cuda_binary_locked(version: Optional[str] = None):
             total_size = 0
             if need_server:
                 try:
-                    head = await client.head(f"{base_url}/{server_archive}")
+                    head = await client.head(build_github_download_url(f"{base_url}/{server_archive}"))
                     total_size += int(head.headers.get("content-length", 0))
                 except Exception:
                     pass
             if need_libs:
                 try:
-                    head = await client.head(f"{base_url}/{libs_archive}")
+                    head = await client.head(build_github_download_url(f"{base_url}/{libs_archive}"))
                     total_size += int(head.headers.get("content-length", 0))
                 except Exception:
                     pass
@@ -314,8 +328,8 @@ async def _download_cuda_binary_locked(version: Optional[str] = None):
             if need_server:
                 server_downloaded = await _download_and_extract_archive(
                     client,
-                    url=f"{base_url}/{server_archive}",
-                    sha256_url=f"{base_url}/{server_archive}.sha256",
+                    url=build_github_download_url(f"{base_url}/{server_archive}"),
+                    sha256_url=build_github_download_url(f"{base_url}/{server_archive}.sha256"),
                     dest_dir=cuda_dir,
                     label="CUDA server",
                     progress_offset=offset,
@@ -332,8 +346,8 @@ async def _download_cuda_binary_locked(version: Optional[str] = None):
             if need_libs:
                 await _download_and_extract_archive(
                     client,
-                    url=f"{base_url}/{libs_archive}",
-                    sha256_url=f"{base_url}/{libs_archive}.sha256",
+                    url=build_github_download_url(f"{base_url}/{libs_archive}"),
+                    sha256_url=build_github_download_url(f"{base_url}/{libs_archive}.sha256"),
                     dest_dir=cuda_dir,
                     label="CUDA libraries",
                     progress_offset=offset,

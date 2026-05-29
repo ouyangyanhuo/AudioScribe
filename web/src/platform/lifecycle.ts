@@ -4,7 +4,7 @@ import { getDefaultServerUrl } from '@/stores/serverStore';
 class WebLifecycle implements PlatformLifecycle {
   onServerReady?: () => void;
 
-  async startServer(_remote = false, _modelsDir?: string | null): Promise<string> {
+  async startServer(_remote = false): Promise<string> {
     // Web assumes server is running externally
     const serverUrl = import.meta.env.VITE_SERVER_URL || getDefaultServerUrl();
     this.onServerReady?.();
@@ -15,7 +15,7 @@ class WebLifecycle implements PlatformLifecycle {
     // No-op for web - server is managed externally
   }
 
-  async restartServer(_modelsDir?: string | null): Promise<string> {
+  async restartServer(): Promise<string> {
     // No-op for web - server is managed externally
     return import.meta.env.VITE_SERVER_URL || getDefaultServerUrl();
   }

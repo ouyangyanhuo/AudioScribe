@@ -21,6 +21,7 @@ from .base import (
 )
 from ..utils.cache import get_cache_key, get_cached_voice_prompt, cache_voice_prompt
 from ..utils.audio import load_audio
+from ..services.model_sources import resolve_model_reference
 
 
 class PyTorchTTSBackend:
@@ -95,7 +96,7 @@ class PyTorchTTSBackend:
         with model_load_progress(model_name, is_cached):
             from qwen_tts import Qwen3TTSModel
 
-            model_path = self._get_model_path(model_size)
+            model_path = resolve_model_reference(self._get_model_path(model_size))
             logger.info("Loading TTS model %s on %s...", model_size, self.device)
 
             # Route both HF Hub and Transformers through a single cache root.
@@ -292,7 +293,7 @@ class PyTorchSTTBackend:
         with model_load_progress(progress_model_name, is_cached):
             from transformers import WhisperProcessor, WhisperForConditionalGeneration
 
-            model_name = WHISPER_HF_REPOS.get(model_size, f"openai/whisper-{model_size}")
+            model_name = resolve_model_reference(WHISPER_HF_REPOS.get(model_size, f"openai/whisper-{model_size}"))
             logger.info("Loading Whisper model %s on %s...", model_size, self.device)
 
             self.processor = WhisperProcessor.from_pretrained(model_name)

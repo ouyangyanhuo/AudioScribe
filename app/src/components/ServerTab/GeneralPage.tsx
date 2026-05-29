@@ -8,10 +8,18 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Toggle } from '@/components/ui/toggle';
 import { useToast } from '@/components/ui/use-toast';
 import { useAutoUpdater } from '@/hooks/useAutoUpdater';
 import { useServerHealth } from '@/lib/hooks/useServer';
+import { useDownloadSettings } from '@/lib/hooks/useSettings';
 import { usePlatform } from '@/platform/PlatformContext';
 import { useServerStore } from '@/stores/serverStore';
 import { LanguageSelect } from './LanguageSelect';
@@ -37,6 +45,7 @@ export function GeneralPage() {
   const setMode = useServerStore((state) => state.setMode);
   const { toast } = useToast();
   const { data: health, isLoading, error: healthError } = useServerHealth();
+  const { settings: downloadSettings, update: updateDownloadSettings } = useDownloadSettings();
 
   const resolver = useMemo(
     () => zodResolver(makeConnectionSchema(t('settings.general.serverUrl.invalidUrl'))),
@@ -204,6 +213,69 @@ export function GeneralPage() {
           title={t('settings.theme.label')}
           description={t('settings.theme.description')}
           action={<ThemeSelect />}
+        />
+      </SettingSection>
+
+      <SettingSection
+        title={t('settings.general.downloads.title', { defaultValue: 'Downloads' })}
+        description={t(
+          'settings.general.downloads.description',
+          {
+            defaultValue:
+              'Choose install-local download sources for models and backend packages.',
+          },
+        )}
+      >
+        <SettingRow
+          title={t('settings.general.downloads.modelSource.title', {
+            defaultValue: 'Model download source',
+          })}
+          description={t(
+            'settings.general.downloads.modelSource.description',
+            {
+              defaultValue:
+                'Model files are stored under the install directory model folder.',
+            },
+          )}
+          action={
+            <Select
+              value={downloadSettings?.model_source ?? 'huggingface'}
+              onValueChange={(value) => {
+                updateDownloadSettings({ model_source: value as 'huggingface' | 'modelscope' });
+              }}
+            >
+              <SelectTrigger className="h-9 w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="huggingface">HuggingFace</SelectItem>
+                <SelectItem value="modelscope">ModelScope</SelectItem>
+              </SelectContent>
+            </Select>
+          }
+        />
+
+        <SettingRow
+          title={t('settings.general.downloads.githubMirror.title', {
+            defaultValue: 'GitHub mirror proxy',
+          })}
+          description={t(
+            'settings.general.downloads.githubMirror.description',
+            {
+              defaultValue:
+                'Use the built-in mainland China mirror for backend downloads from GitHub Releases.',
+            },
+          )}
+          htmlFor="githubMirror"
+          action={
+            <Toggle
+              id="githubMirror"
+              checked={downloadSettings?.github_mirror_enabled ?? false}
+              onCheckedChange={(checked: boolean) => {
+                updateDownloadSettings({ github_mirror_enabled: checked });
+              }}
+            />
+          }
         />
       </SettingSection>
 

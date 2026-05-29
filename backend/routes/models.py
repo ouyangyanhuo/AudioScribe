@@ -9,7 +9,6 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from .. import models
-from ..utils.platform_detect import get_backend_type
 from ..services.task_queue import create_background_task
 from ..utils.progress import get_progress_manager
 from ..utils.tasks import get_task_manager
@@ -112,95 +111,16 @@ async def get_model_progress(model_name: str):
 
 @router.get("/models/cache-dir")
 async def get_models_cache_dir():
-    """Get the path to the HuggingFace model cache directory."""
-    from huggingface_hub import constants as hf_constants
+    """Get the active install-local model cache directory."""
+    from ..services.model_sources import get_active_model_cache_dir, get_model_source
 
-    return {"path": str(Path(hf_constants.HF_HUB_CACHE))}
+    return {"path": str(get_active_model_cache_dir()), "source": get_model_source()}
 
 
 @router.post("/models/migrate")
 async def migrate_models(request: models.ModelMigrateRequest):
-    """Move all downloaded models to a new directory with byte-level progress via SSE."""
-    from huggingface_hub import constants as hf_constants
-
-    source = Path(hf_constants.HF_HUB_CACHE)
-    destination = Path(request.destination)
-
-    if not source.exists():
-        raise HTTPException(status_code=404, detail="Current model cache directory not found")
-
-    if source.resolve() == destination.resolve():
-        raise HTTPException(status_code=400, detail="Source and destination are the same directory")
-
-    if destination.resolve().is_relative_to(source.resolve()):
-        raise HTTPException(status_code=400, detail="Destination cannot be inside the current cache directory")
-
-    progress_manager = get_progress_manager()
-    model_dirs = [d for d in source.iterdir() if d.name.startswith("models--") and d.is_dir()]
-    if not model_dirs:
-        progress_manager.update_progress("migration", 1, 1, status="complete")
-        progress_manager.mark_complete("migration")
-        return {"moved": 0, "errors": [], "source": str(source), "destination": str(destination)}
-
-    destination.mkdir(parents=True, exist_ok=True)
-
-    same_fs = False
-    try:
-        same_fs = source.stat().st_dev == destination.stat().st_dev
-    except OSError:
-        pass
-
-    async def migrate_background():
-        moved = 0
-        errors = []
-        try:
-            if same_fs:
-                total = len(model_dirs)
-                for i, item in enumerate(model_dirs):
-                    dest_item = destination / item.name
-                    try:
-                        if dest_item.exists():
-                            shutil.rmtree(dest_item)
-                        shutil.move(str(item), str(dest_item))
-                        moved += 1
-                        progress_manager.update_progress(
-                            "migration",
-                            i + 1,
-                            total,
-                            filename=item.name,
-                            status="downloading",
-                        )
-                    except Exception as e:
-                        errors.append(f"{item.name}: {str(e)}")
-            else:
-                total_bytes = sum(_get_dir_size(d) for d in model_dirs)
-                progress_manager.update_progress(
-                    "migration", 0, total_bytes, filename="Calculating...", status="downloading"
-                )
-
-                copied = 0
-                for item in model_dirs:
-                    dest_item = destination / item.name
-                    try:
-                        if dest_item.exists():
-                            shutil.rmtree(dest_item)
-                        copied = await asyncio.to_thread(
-                            _copy_with_progress, item, dest_item, progress_manager, copied, total_bytes
-                        )
-                        await asyncio.to_thread(shutil.rmtree, str(item))
-                        moved += 1
-                    except Exception as e:
-                        errors.append(f"{item.name}: {str(e)}")
-
-            progress_manager.update_progress("migration", 1, 1, status="complete")
-            progress_manager.mark_complete("migration")
-        except Exception as e:
-            progress_manager.update_progress("migration", 0, 0, status="error")
-            progress_manager.mark_error("migration", str(e))
-
-    create_background_task(migrate_background())
-
-    return {"source": str(source), "destination": str(destination)}
+    """Legacy endpoint kept for older clients; model storage is no longer movable."""
+    raise HTTPException(status_code=410, detail="Model storage is fixed to the install directory and cannot be changed.")
 
 
 @router.get("/models/migrate/progress")
@@ -226,21 +146,12 @@ async def get_migration_progress():
 @router.get("/models/status", response_model=models.ModelStatusListResponse)
 async def get_model_status():
     """Get status of all available models."""
-    from huggingface_hub import constants as hf_constants
-
-    backend_type = get_backend_type()
     task_manager = get_task_manager()
 
     active_download_names = {task.model_name for task in task_manager.get_active_downloads()}
 
-    try:
-        from huggingface_hub import scan_cache_dir
-
-        use_scan_cache = True
-    except ImportError:
-        use_scan_cache = False
-
     from ..backends import get_all_model_configs, check_model_loaded
+    from ..services.model_sources import get_model_cache_dir_for_repo, is_model_cached
 
     registry_configs = get_all_model_configs()
     model_configs = [
@@ -257,85 +168,24 @@ async def get_model_status():
     model_to_repo = {cfg["model_name"]: cfg["hf_repo_id"] for cfg in model_configs}
     active_download_repos = {model_to_repo.get(name) for name in active_download_names if name in model_to_repo}
 
-    cache_info = None
-    if use_scan_cache:
-        try:
-            cache_info = scan_cache_dir()
-        except Exception:
-            pass
-
     statuses = []
 
     for config in model_configs:
         try:
-            downloaded = False
+            downloaded = is_model_cached(config["hf_repo_id"], weight_extensions=(".safetensors", ".bin", ".pt", ".pth", ".npz"))
             size_mb = None
             loaded = False
 
-            if cache_info:
-                repo_id = config["hf_repo_id"]
-                for repo in cache_info.repos:
-                    if repo.repo_id == repo_id:
-                        has_model_weights = False
-                        for rev in repo.revisions:
-                            for f in rev.files:
-                                fname = f.file_name.lower()
-                                if fname.endswith((".safetensors", ".bin", ".pt", ".pth", ".npz")):
-                                    has_model_weights = True
-                                    break
-                            if has_model_weights:
-                                break
-
-                        has_incomplete = False
-                        try:
-                            cache_dir = hf_constants.HF_HUB_CACHE
-                            blobs_dir = Path(cache_dir) / ("models--" + repo_id.replace("/", "--")) / "blobs"
-                            if blobs_dir.exists():
-                                has_incomplete = any(blobs_dir.glob("*.incomplete"))
-                        except Exception:
-                            pass
-
-                        if has_model_weights and not has_incomplete:
-                            downloaded = True
-                            try:
-                                total_size = sum(revision.size_on_disk for revision in repo.revisions)
-                                size_mb = total_size / (1024 * 1024)
-                            except Exception:
-                                pass
-                        break
-
-            if not downloaded:
+            if downloaded:
                 try:
-                    cache_dir = hf_constants.HF_HUB_CACHE
-                    repo_cache = Path(cache_dir) / ("models--" + config["hf_repo_id"].replace("/", "--"))
-
+                    repo_cache = get_model_cache_dir_for_repo(config["hf_repo_id"])
                     if repo_cache.exists():
-                        blobs_dir = repo_cache / "blobs"
-                        has_incomplete = blobs_dir.exists() and any(blobs_dir.glob("*.incomplete"))
-
-                        if not has_incomplete:
-                            snapshots_dir = repo_cache / "snapshots"
-                            has_model_files = False
-                            if snapshots_dir.exists():
-                                has_model_files = (
-                                    any(snapshots_dir.rglob("*.bin"))
-                                    or any(snapshots_dir.rglob("*.safetensors"))
-                                    or any(snapshots_dir.rglob("*.pt"))
-                                    or any(snapshots_dir.rglob("*.pth"))
-                                    or any(snapshots_dir.rglob("*.npz"))
-                                )
-
-                            if has_model_files:
-                                downloaded = True
-                                try:
-                                    total_size = sum(
-                                        f.stat().st_size
-                                        for f in repo_cache.rglob("*")
-                                        if f.is_file() and not f.name.endswith(".incomplete")
-                                    )
-                                    size_mb = total_size / (1024 * 1024)
-                                except Exception:
-                                    pass
+                        total_size = sum(
+                            f.stat().st_size
+                            for f in repo_cache.rglob("*")
+                            if f.is_file() and not f.name.endswith(".incomplete")
+                        )
+                        size_mb = total_size / (1024 * 1024)
                 except Exception:
                     pass
 
@@ -413,7 +263,7 @@ async def trigger_model_download(request: models.ModelDownloadRequest):
         model_name=request.model_name,
         current=0,
         total=0,
-        filename="Connecting to HuggingFace...",
+        filename="Connecting to model source...",
         status="downloading",
     )
 
@@ -443,9 +293,9 @@ async def cancel_model_download(request: models.ModelDownloadRequest):
 
 @router.delete("/models/{model_name}")
 async def delete_model(model_name: str):
-    """Delete a downloaded model from the HuggingFace cache."""
-    from huggingface_hub import constants as hf_constants
+    """Delete a downloaded model from the active install-local model cache."""
     from ..backends import get_model_config, unload_model_by_config
+    from ..services.model_sources import get_model_cache_dir_for_repo
 
     config = get_model_config(model_name)
     if not config:
@@ -456,8 +306,7 @@ async def delete_model(model_name: str):
     try:
         unload_model_by_config(config)
 
-        cache_dir = hf_constants.HF_HUB_CACHE
-        repo_cache_dir = Path(cache_dir) / ("models--" + hf_repo_id.replace("/", "--"))
+        repo_cache_dir = get_model_cache_dir_for_repo(hf_repo_id)
 
         if not repo_cache_dir.exists():
             raise HTTPException(status_code=404, detail=f"Model {model_name} not found in cache")

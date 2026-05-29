@@ -250,6 +250,15 @@ export interface GenerationSettings {
 
 export type GenerationSettingsUpdate = Partial<GenerationSettings>;
 
+export type ModelDownloadSource = 'huggingface' | 'modelscope';
+
+export interface DownloadSettings {
+  model_source: ModelDownloadSource;
+  github_mirror_enabled: boolean;
+}
+
+export type DownloadSettingsUpdate = Partial<DownloadSettings>;
+
 export interface TranscriptionRequest {
   language?: LanguageCode;
   model?: WhisperModelSize;

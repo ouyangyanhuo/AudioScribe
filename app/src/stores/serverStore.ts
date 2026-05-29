@@ -15,8 +15,6 @@ interface ServerStore {
   keepServerRunningOnClose: boolean;
   setKeepServerRunningOnClose: (keepRunning: boolean) => void;
 
-  customModelsDir: string | null;
-  setCustomModelsDir: (dir: string | null) => void;
 }
 
 /**
@@ -82,8 +80,6 @@ export const useServerStore = create<ServerStore>()(
       keepServerRunningOnClose: false,
       setKeepServerRunningOnClose: (keepRunning) => set({ keepServerRunningOnClose: keepRunning }),
 
-      customModelsDir: null,
-      setCustomModelsDir: (dir) => set({ customModelsDir: dir }),
     }),
     {
       name: 'voicebox-server',

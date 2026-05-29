@@ -47,6 +47,21 @@ if "--version" in sys.argv:
     print(f"voicebox-server {__version__}")
     sys.exit(0)
 
+
+def _preconfigure_install_dir_env():
+    """Set VOICEBOX_INSTALL_DIR before imports that initialize model caches."""
+    args = sys.argv[1:]
+    for idx, arg in enumerate(args):
+        if arg == "--install-dir" and idx + 1 < len(args):
+            os.environ["VOICEBOX_INSTALL_DIR"] = args[idx + 1]
+            return
+        if arg.startswith("--install-dir="):
+            os.environ["VOICEBOX_INSTALL_DIR"] = arg.split("=", 1)[1]
+            return
+
+
+_preconfigure_install_dir_env()
+
 import logging
 
 # Set up logging FIRST, before any imports that might fail
@@ -239,10 +254,16 @@ if __name__ == "__main__":
             help="Port to bind to",
         )
         parser.add_argument(
+            "--install-dir",
+            type=str,
+            default=None,
+            help="Install directory that contains data, cache, and model folders",
+        )
+        parser.add_argument(
             "--data-dir",
             type=str,
             default=None,
-            help="Data directory for database, profiles, and generated audio",
+            help="Legacy data directory override for database, profiles, and generated audio",
         )
         parser.add_argument(
             "--parent-pid",
@@ -274,15 +295,23 @@ if __name__ == "__main__":
         # Register parent watchdog to start after server is fully ready
         if args.parent_pid is not None:
             _parent_pid = args.parent_pid
-            _data_dir = args.data_dir
+            _data_dir = args.data_dir or (
+                os.path.join(args.install_dir, "data") if args.install_dir else None
+            )
+
             @app.on_event("startup")
             async def _on_startup():
                 _start_parent_watchdog(_parent_pid, _data_dir)
 
-        logger.info(f"Parsed arguments: host={args.host}, port={args.port}, data_dir={args.data_dir}")
+        logger.info(
+            f"Parsed arguments: host={args.host}, port={args.port}, install_dir={args.install_dir}, data_dir={args.data_dir}"
+        )
 
-        # Set data directory if provided
-        if args.data_dir:
+        # Set install/data directory if provided
+        if args.install_dir:
+            logger.info(f"Setting install directory to: {args.install_dir}")
+            config.set_install_dir(args.install_dir)
+        elif args.data_dir:
             logger.info(f"Setting data directory to: {args.data_dir}")
             config.set_data_dir(args.data_dir)
 

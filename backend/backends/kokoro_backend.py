@@ -28,6 +28,7 @@ from .base import (
     combine_voice_prompts as _combine_voice_prompts,
     model_load_progress,
 )
+from ..services.model_sources import resolve_model_reference
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +171,7 @@ class KokoroTTSBackend:
             device = self.device
             logger.info(f"Loading Kokoro-82M on {device}...")
 
-            self._model = KModel(repo_id=KOKORO_HF_REPO).to(device).eval()
+            self._model = KModel(repo_id=resolve_model_reference(KOKORO_HF_REPO)).to(device).eval()
 
         logger.info("Kokoro-82M loaded successfully")
 
@@ -184,7 +185,7 @@ class KokoroTTSBackend:
             # Create pipeline with our existing model (no redundant model loading)
             self._pipelines[kokoro_lang] = KPipeline(
                 lang_code=kokoro_lang,
-                repo_id=KOKORO_HF_REPO,
+                repo_id=resolve_model_reference(KOKORO_HF_REPO),
                 model=self._model,
             )
 

@@ -199,7 +199,6 @@ struct ServerState {
     child: Mutex<Option<tauri_plugin_shell::process::CommandChild>>,
     server_pid: Mutex<Option<u32>>,
     keep_running_on_close: Mutex<bool>,
-    models_dir: Mutex<Option<String>>,
 }
 
 #[command]
@@ -207,16 +206,7 @@ async fn start_server(
     app: tauri::AppHandle,
     state: State<'_, ServerState>,
     remote: Option<bool>,
-    models_dir: Option<String>,
 ) -> Result<String, String> {
-    // Store models_dir for use on restart (empty string means reset to default)
-    if let Some(ref dir) = models_dir {
-        if dir.is_empty() {
-            *state.models_dir.lock().unwrap() = None;
-        } else {
-            *state.models_dir.lock().unwrap() = Some(dir.clone());
-        }
-    }
     // Check if server is already running (managed by this app instance)
     if state.child.lock().unwrap().is_some() {
         return Ok(format!("http://127.0.0.1:{}", SERVER_PORT));
@@ -345,18 +335,25 @@ async fn start_server(
     // Brief wait for port to be released
     std::thread::sleep(std::time::Duration::from_millis(200));
 
-    // Get app data directory
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    // Root all writable state under the install directory.
+    let install_dir = std::env::current_exe()
+        .map_err(|e| format!("Failed to get current executable path: {}", e))?
+        .parent()
+        .ok_or_else(|| "Failed to resolve install directory".to_string())?
+        .to_path_buf();
+    let data_dir = install_dir.join("data");
 
-    // Ensure data directory exists
+    // Ensure required storage directories exist and are writable.
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("Failed to create data dir: {}", e))?;
+    std::fs::create_dir_all(install_dir.join("cache"))
+        .map_err(|e| format!("Failed to create cache dir: {}", e))?;
+    std::fs::create_dir_all(install_dir.join("model"))
+        .map_err(|e| format!("Failed to create model dir: {}", e))?;
 
     println!("=================================================================");
     println!("Starting voicebox-server sidecar");
+    println!("Install directory: {:?}", install_dir);
     println!("Data directory: {:?}", data_dir);
     println!("Remote mode: {}", remote.unwrap_or(false));
 
@@ -455,15 +452,13 @@ async fn start_server(
         .to_str()
         .ok_or_else(|| "Invalid data dir path".to_string())?
         .to_string();
+    let install_dir_str = install_dir
+        .to_str()
+        .ok_or_else(|| "Invalid install dir path".to_string())?
+        .to_string();
     let port_str = SERVER_PORT.to_string();
     let parent_pid_str = std::process::id().to_string();
     let is_remote = remote.unwrap_or(false);
-
-    // Resolve the custom models directory from the parameter or stored state
-    let effective_models_dir = models_dir.or_else(|| state.models_dir.lock().unwrap().clone());
-    if let Some(ref dir) = effective_models_dir {
-        println!("Custom models directory: {}", dir);
-    }
 
     // If CUDA binary exists, launch it from the onedir directory.
     // .current_dir() is critical: PyInstaller onedir expects all DLLs and
@@ -473,22 +468,18 @@ async fn start_server(
         println!("Launching CUDA backend: {:?} (cwd: {:?})", cuda_path, cuda_dir);
         let mut cmd = app.shell().command(cuda_path.to_str().unwrap());
         cmd = cmd.current_dir(cuda_dir);
-        cmd = cmd.args(["--data-dir", &data_dir_str, "--port", &port_str, "--parent-pid", &parent_pid_str]);
+        cmd = cmd.env("VOICEBOX_INSTALL_DIR", &install_dir_str);
+        cmd = cmd.args(["--install-dir", &install_dir_str, "--data-dir", &data_dir_str, "--port", &port_str, "--parent-pid", &parent_pid_str]);
         if is_remote {
             cmd = cmd.args(["--host", "0.0.0.0"]);
-        }
-        if let Some(ref dir) = effective_models_dir {
-            cmd = cmd.env("VOICEBOX_MODELS_DIR", dir);
         }
         cmd.spawn()
     } else {
         // Use the bundled CPU sidecar
-        sidecar = sidecar.args(["--data-dir", &data_dir_str, "--port", &port_str, "--parent-pid", &parent_pid_str]);
+        sidecar = sidecar.env("VOICEBOX_INSTALL_DIR", &install_dir_str);
+        sidecar = sidecar.args(["--install-dir", &install_dir_str, "--data-dir", &data_dir_str, "--port", &port_str, "--parent-pid", &parent_pid_str]);
         if is_remote {
             sidecar = sidecar.args(["--host", "0.0.0.0"]);
-        }
-        if let Some(ref dir) = effective_models_dir {
-            sidecar = sidecar.env("VOICEBOX_MODELS_DIR", dir);
         }
         println!("Spawning server process...");
         sidecar.spawn()
@@ -742,18 +733,8 @@ async fn stop_server(state: State<'_, ServerState>) -> Result<(), String> {
 async fn restart_server(
     app: tauri::AppHandle,
     state: State<'_, ServerState>,
-    models_dir: Option<String>,
 ) -> Result<String, String> {
     println!("restart_server: stopping current server...");
-
-    // Update stored models_dir: empty string means reset to default, non-empty means set
-    if let Some(ref dir) = models_dir {
-        if dir.is_empty() {
-            *state.models_dir.lock().unwrap() = None;
-        } else {
-            *state.models_dir.lock().unwrap() = Some(dir.clone());
-        }
-    }
 
     // Stop the current server
     stop_server(state.clone()).await?;
@@ -762,9 +743,9 @@ async fn restart_server(
     println!("restart_server: waiting for port release...");
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
-    // Start server again (will auto-detect CUDA binary and use stored models_dir)
+    // Start server again (will auto-detect CUDA binary)
     println!("restart_server: starting server...");
-    start_server(app, state, None, None).await
+    start_server(app, state, None).await
 }
 
 #[command]
@@ -1238,7 +1219,6 @@ pub fn run() {
             child: Mutex::new(None),
             server_pid: Mutex::new(None),
             keep_running_on_close: Mutex::new(false),
-            models_dir: Mutex::new(None),
         })
         .manage(audio_capture::AudioCaptureState::new())
         .manage(audio_output::AudioOutputState::new())
@@ -1442,9 +1422,9 @@ pub fn run() {
                         // the HTTP request below can race with process exit, leaving
                         // the watchdog unaware it should stay alive. The sentinel
                         // file is checked during the watchdog grace period.
-                        let data_dir = app
-                            .path()
-                            .app_data_dir()
+                        let data_dir = std::env::current_exe()
+                            .ok()
+                            .and_then(|p| p.parent().map(|p| p.join("data")))
                             .unwrap_or_default();
                         let sentinel = data_dir.join(".keep-running");
                         if let Err(e) = std::fs::write(&sentinel, b"1") {

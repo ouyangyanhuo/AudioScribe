@@ -28,6 +28,7 @@ from .base import (
     combine_voice_prompts as _combine_voice_prompts,
     model_load_progress,
 )
+from ..services.model_sources import resolve_model_reference
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,7 @@ class QwenCustomVoiceBackend:
         with model_load_progress(model_name, is_cached):
             from qwen_tts import Qwen3TTSModel
 
-            model_path = self._get_model_path(model_size)
+            model_path = resolve_model_reference(self._get_model_path(model_size))
             logger.info("Loading Qwen CustomVoice %s on %s...", model_size, self.device)
 
             if self.device == "cpu":

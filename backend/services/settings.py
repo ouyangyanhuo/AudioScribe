@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ..database import CaptureSettings as DBCaptureSettings
+from ..database import DownloadSettings as DBDownloadSettings
 from ..database import GenerationSettings as DBGenerationSettings
 from ..utils.capture_chords import (
     default_push_to_talk_chord,
@@ -40,6 +41,16 @@ def _get_or_create_generation_row(db: Session) -> DBGenerationSettings:
     row = db.query(DBGenerationSettings).filter(DBGenerationSettings.id == SINGLETON_ID).first()
     if row is None:
         row = DBGenerationSettings(id=SINGLETON_ID)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return row
+
+
+def _get_or_create_download_row(db: Session) -> DBDownloadSettings:
+    row = db.query(DBDownloadSettings).filter(DBDownloadSettings.id == SINGLETON_ID).first()
+    if row is None:
+        row = DBDownloadSettings(id=SINGLETON_ID)
         db.add(row)
         db.commit()
         db.refresh(row)
@@ -88,3 +99,33 @@ def update_generation_settings(db: Session, patch: dict[str, Any]) -> DBGenerati
     db.commit()
     db.refresh(row)
     return row
+
+
+def get_download_settings(db: Session) -> DBDownloadSettings:
+    """Return download settings, creating the singleton row if missing."""
+    return _get_or_create_download_row(db)
+
+
+def update_download_settings(db: Session, patch: dict[str, Any]) -> DBDownloadSettings:
+    row = _get_or_create_download_row(db)
+    _apply_patch(row, patch)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def get_download_settings_snapshot() -> tuple[str, bool]:
+    """Read download settings outside a FastAPI request."""
+    try:
+        from ..database import session as db_session
+
+        if db_session.SessionLocal is None:
+            return "huggingface", False
+        db = db_session.SessionLocal()
+        try:
+            row = get_download_settings(db)
+            return row.model_source, row.github_mirror_enabled
+        finally:
+            db.close()
+    except Exception:
+        return "huggingface", False

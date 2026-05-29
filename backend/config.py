@@ -1,7 +1,10 @@
-"""
-Configuration module for voicebox backend.
+"""Configuration module for voicebox backend.
 
-Handles data directory configuration for production bundling.
+All writable runtime state is rooted under the application install directory:
+
+* ``data/`` stores user data and the SQLite database.
+* ``cache/`` stores transient runtime caches.
+* ``model/`` stores downloaded ML models.
 """
 
 import logging
@@ -10,16 +13,70 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Allow users to override the HuggingFace model download directory.
-# Set VOICEBOX_MODELS_DIR to an absolute path before starting the server.
-# This sets HF_HUB_CACHE so all huggingface_hub downloads go to that path.
-_custom_models_dir = os.environ.get("VOICEBOX_MODELS_DIR")
-if _custom_models_dir:
-    os.environ["HF_HUB_CACHE"] = _custom_models_dir
-    logger.info("Model download path set to: %s", _custom_models_dir)
+_install_dir = Path(os.environ.get("VOICEBOX_INSTALL_DIR", ".")).resolve()
+_data_dir = _install_dir / "data"
+_cache_dir = _install_dir / "cache"
+_models_dir = _install_dir / "model"
 
-# Default data directory (used in development)
-_data_dir = Path("data").resolve()
+
+def _set_env_path(name: str, path: Path) -> None:
+    os.environ[name] = str(path)
+
+
+def _sync_huggingface_runtime_constants() -> None:
+    try:
+        from huggingface_hub import constants as hf_constants
+
+        hf_constants.HF_HOME = str(_cache_dir / "huggingface")
+        hf_constants.HF_HUB_CACHE = str(_models_dir / "huggingface")
+    except Exception:
+        pass
+
+    try:
+        from transformers.utils import hub as transformers_hub
+
+        transformers_hub.TRANSFORMERS_CACHE = str(_models_dir / "huggingface")
+    except Exception:
+        pass
+
+
+def configure_cache_environment() -> None:
+    """Force third-party caches and model downloads under the install dir."""
+    _set_env_path("VOICEBOX_INSTALL_DIR", _install_dir)
+    _set_env_path("VOICEBOX_CACHE_DIR", _cache_dir)
+    _set_env_path("VOICEBOX_MODELS_DIR", _models_dir)
+
+    _set_env_path("XDG_CACHE_HOME", _cache_dir)
+    _set_env_path("TORCH_HOME", _cache_dir / "torch")
+    _set_env_path("NUMBA_CACHE_DIR", _cache_dir / "numba")
+    _set_env_path("MPLCONFIGDIR", _cache_dir / "matplotlib")
+
+    _set_env_path("HF_HOME", _cache_dir / "huggingface")
+    _set_env_path("HF_HUB_CACHE", _models_dir / "huggingface")
+    _set_env_path("TRANSFORMERS_CACHE", _models_dir / "huggingface")
+    _set_env_path("HF_DATASETS_CACHE", _cache_dir / "huggingface" / "datasets")
+
+    _set_env_path("MODELSCOPE_CACHE", _models_dir / "modelscope")
+    _set_env_path("MODELSCOPE_MODULES_CACHE", _cache_dir / "modelscope" / "modules")
+
+    _sync_huggingface_runtime_constants()
+
+
+def set_install_dir(path: str | Path) -> None:
+    """Set the application install directory and derived writable roots."""
+    global _install_dir, _data_dir, _cache_dir, _models_dir
+
+    _install_dir = Path(path).resolve()
+    _data_dir = _install_dir / "data"
+    _cache_dir = _install_dir / "cache"
+    _models_dir = _install_dir / "model"
+    configure_cache_environment()
+    ensure_storage_roots()
+    logger.info("Install directory set to: %s", _install_dir)
+
+
+def get_install_dir() -> Path:
+    return _install_dir
 
 
 def _path_relative_to_any_data_dir(path: Path) -> Path | None:
@@ -39,15 +96,15 @@ def _path_relative_to_any_data_dir(path: Path) -> Path | None:
 
 def set_data_dir(path: str | Path):
     """
-    Set the data directory path.
+    Resolve the legacy data directory argument to an install directory.
 
     Args:
         path: Path to the data directory
     """
-    global _data_dir
-    _data_dir = Path(path).resolve()
-    _data_dir.mkdir(parents=True, exist_ok=True)
-    logger.info("Data directory set to: %s", _data_dir)
+    data_path = Path(path).resolve()
+    install_path = data_path.parent if data_path.name == "data" else data_path
+    set_install_dir(install_path)
+    logger.info("Legacy data directory argument resolved to install directory: %s", install_path)
 
 
 def get_data_dir() -> Path:
@@ -128,13 +185,53 @@ def get_captures_dir() -> Path:
 
 def get_cache_dir() -> Path:
     """Get cache directory path."""
-    path = _data_dir / "cache"
+    path = _cache_dir
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_cache_root_dir() -> Path:
+    """Get the top-level runtime cache directory."""
+    path = _cache_dir
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def get_models_dir() -> Path:
-    """Get models directory path."""
-    path = _data_dir / "models"
+    """Get the top-level model download directory."""
+    path = _models_dir
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def get_huggingface_home_dir() -> Path:
+    path = get_cache_root_dir() / "huggingface"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_huggingface_models_dir() -> Path:
+    path = get_models_dir() / "huggingface"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_modelscope_models_dir() -> Path:
+    path = get_models_dir() / "modelscope"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def ensure_storage_roots() -> None:
+    """Create and verify the required install-local writable roots."""
+    for root in (_data_dir, _cache_dir, _models_dir):
+        root.mkdir(parents=True, exist_ok=True)
+        probe = root / ".voicebox-write-test"
+        try:
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink()
+        except Exception as exc:
+            raise RuntimeError(f"Voicebox storage directory is not writable: {root}") from exc
+
+
+configure_cache_environment()

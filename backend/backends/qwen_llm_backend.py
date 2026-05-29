@@ -20,6 +20,7 @@ from .base import (
     model_load_progress,
 )
 from ..utils.hf_offline_patch import force_offline_if_cached
+from ..services.model_sources import resolve_model_reference
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ class PyTorchQwenLLMBackend:
 
         progress_model_name = _progress_name(model_size)
         is_cached = self._is_model_cached(model_size)
-        repo = self._get_model_path(model_size)
+        repo = resolve_model_reference(self._get_model_path(model_size))
 
         with model_load_progress(progress_model_name, is_cached):
             logger.info("Loading Qwen3 %s on %s...", model_size, self.device)
@@ -219,7 +220,7 @@ class MLXQwenLLMBackend:
 
         progress_model_name = _progress_name(model_size)
         is_cached = self._is_model_cached(model_size)
-        repo = self._get_model_path(model_size)
+        repo = resolve_model_reference(self._get_model_path(model_size))
 
         with model_load_progress(progress_model_name, is_cached):
             logger.info("Loading Qwen3 %s via MLX...", model_size)

@@ -5,7 +5,25 @@ entry point for development.
 """
 
 import argparse
+import os
+import sys
+
 import uvicorn
+
+
+def _preconfigure_install_dir_env() -> None:
+    """Set VOICEBOX_INSTALL_DIR before importing modules that initialize caches."""
+    args = sys.argv[1:]
+    for idx, arg in enumerate(args):
+        if arg == "--install-dir" and idx + 1 < len(args):
+            os.environ["VOICEBOX_INSTALL_DIR"] = args[idx + 1]
+            return
+        if arg.startswith("--install-dir="):
+            os.environ["VOICEBOX_INSTALL_DIR"] = arg.split("=", 1)[1]
+            return
+
+
+_preconfigure_install_dir_env()
 
 from .app import app  # noqa: F401 -- re-export for uvicorn "backend.main:app"
 from . import config, database
@@ -25,14 +43,22 @@ if __name__ == "__main__":
         help="Port to bind to",
     )
     parser.add_argument(
+        "--install-dir",
+        type=str,
+        default=None,
+        help="Install directory that contains data, cache, and model folders",
+    )
+    parser.add_argument(
         "--data-dir",
         type=str,
         default=None,
-        help="Data directory for database, profiles, and generated audio",
+        help="Legacy data directory override for database, profiles, and generated audio",
     )
     args = parser.parse_args()
 
-    if args.data_dir:
+    if args.install_dir:
+        config.set_install_dir(args.install_dir)
+    elif args.data_dir:
         config.set_data_dir(args.data_dir)
 
     database.init_db()

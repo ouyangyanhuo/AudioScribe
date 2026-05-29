@@ -30,6 +30,7 @@ from .base import (
     model_load_progress,
 )
 from ..utils.cache import get_cache_key, get_cached_voice_prompt, cache_voice_prompt
+from ..services.model_sources import require_huggingface_source
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,7 @@ class HumeTadaBackend:
         repo = TADA_MODEL_REPOS.get(model_size, TADA_1B_REPO)
 
         with model_load_progress(model_name, is_cached):
+            require_huggingface_source("Hume TADA")
             # Install DAC shim before importing tada — tada's encoder/decoder
             # import dac.nn.layers.Snake1d which requires the descript-audio-codec
             # package.  The real package pulls in onnx/tensorboard/matplotlib via

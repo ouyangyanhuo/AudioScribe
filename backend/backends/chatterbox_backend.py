@@ -24,6 +24,7 @@ from .base import (
     model_load_progress,
     patch_chatterbox_f32,
 )
+from ..services.model_sources import require_huggingface_source
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,7 @@ class ChatterboxTTSBackend:
         is_cached = self._is_model_cached()
 
         with model_load_progress(model_name, is_cached):
+            require_huggingface_source("Chatterbox Multilingual")
             device = self._get_device()
             self._device = device
             logger.info(f"Loading Chatterbox Multilingual TTS on {device}...")

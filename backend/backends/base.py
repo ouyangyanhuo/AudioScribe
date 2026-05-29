@@ -8,7 +8,6 @@ voice prompt combination, and model loading progress tracking.
 import logging
 import platform
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
 import numpy as np
@@ -40,38 +39,13 @@ def is_model_cached(
         True if model is fully cached, False if missing or incomplete.
     """
     try:
-        from huggingface_hub import constants as hf_constants
+        from ..services.model_sources import is_model_cached as _is_source_model_cached
 
-        repo_cache = Path(hf_constants.HF_HUB_CACHE) / ("models--" + hf_repo.replace("/", "--"))
-
-        if not repo_cache.exists():
-            return False
-
-        # Incomplete blobs mean a download is still in progress
-        blobs_dir = repo_cache / "blobs"
-        if blobs_dir.exists() and any(blobs_dir.glob("*.incomplete")):
-            logger.debug(f"Found .incomplete files for {hf_repo}")
-            return False
-
-        snapshots_dir = repo_cache / "snapshots"
-        if not snapshots_dir.exists():
-            return False
-
-        if required_files:
-            # Check that every required filename exists somewhere in snapshots
-            for fname in required_files:
-                if not any(snapshots_dir.rglob(fname)):
-                    return False
-            return True
-
-        # Check that at least one weight file exists
-        for ext in weight_extensions:
-            if any(snapshots_dir.rglob(f"*{ext}")):
-                return True
-
-        logger.debug(f"No model weights found for {hf_repo}")
-        return False
-
+        return _is_source_model_cached(
+            hf_repo,
+            weight_extensions=weight_extensions,
+            required_files=required_files,
+        )
     except Exception as e:
         logger.warning(f"Error checking cache for {hf_repo}: {e}")
         return False
@@ -270,7 +244,7 @@ def model_load_progress(
             model_name=model_name,
             current=0,
             total=0,
-            filename="Connecting to HuggingFace...",
+            filename="Connecting to model source...",
             status="downloading",
         )
 

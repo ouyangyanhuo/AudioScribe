@@ -234,6 +234,17 @@ class GenerationSettings(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class DownloadSettings(Base):
+    """Singleton row for network download preferences."""
+
+    __tablename__ = "download_settings"
+
+    id = Column(Integer, primary_key=True, default=1)
+    model_source = Column(String, nullable=False, default="huggingface")
+    github_mirror_enabled = Column(Boolean, nullable=False, default=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class MCPClientBinding(Base):
     """Per-MCP-client settings (voice profile, engine, personality default).
 
