@@ -74,3 +74,6 @@ backend/tests/fixtures/reference_voice.txt
 CLAUDE.md
 backend/indextts2_worker/.venv/*
 cache/*
+.claude/*
+.codex/*
+.agents/*

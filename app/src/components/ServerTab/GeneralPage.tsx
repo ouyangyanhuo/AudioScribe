@@ -41,8 +41,6 @@ export function GeneralPage() {
   const setServerUrl = useServerStore((state) => state.setServerUrl);
   const keepServerRunningOnClose = useServerStore((state) => state.keepServerRunningOnClose);
   const setKeepServerRunningOnClose = useServerStore((state) => state.setKeepServerRunningOnClose);
-  const mode = useServerStore((state) => state.mode);
-  const setMode = useServerStore((state) => state.setMode);
   const { toast } = useToast();
   const { data: health, isLoading, error: healthError } = useServerHealth();
   const { settings: downloadSettings, update: updateDownloadSettings } = useDownloadSettings();
@@ -179,29 +177,6 @@ export function GeneralPage() {
             />
           }
         />
-
-        {platform.metadata.isTauri && (
-          <SettingRow
-            title={t('settings.general.networkAccess.title')}
-            description={t('settings.general.networkAccess.description')}
-            htmlFor="allowNetworkAccess"
-            action={
-              <Toggle
-                id="allowNetworkAccess"
-                checked={mode === 'remote'}
-                onCheckedChange={(checked: boolean) => {
-                  setMode(checked ? 'remote' : 'local');
-                  toast({
-                    title: t('settings.general.networkAccess.updatedTitle'),
-                    description: checked
-                      ? t('settings.general.networkAccess.enabled')
-                      : t('settings.general.networkAccess.disabled'),
-                  });
-                }}
-              />
-            }
-          />
-        )}
 
         <SettingRow
           title={t('settings.language.label')}

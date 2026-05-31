@@ -26,9 +26,8 @@ export function getEngineDescription(): string {
 }
 
 export function isProfileCompatibleWithEngine(
-  profile: VoiceProfileResponse,
+  _profile: VoiceProfileResponse,
   engine: string,
 ): boolean {
-  const voiceType = profile.voice_type || 'cloned';
-  return voiceType === 'cloned' && engine === 'indextts2';
+  return engine === 'indextts2';
 }

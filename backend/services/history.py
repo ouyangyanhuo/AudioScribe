@@ -63,7 +63,7 @@ async def create_generation(
     instruct: Optional[str] = None,
     generation_id: Optional[str] = None,
     status: str = "completed",
-    engine: Optional[str] = "indextts2",
+    engine: Optional[str] = None,
     model_size: Optional[str] = None,
     source: str = "manual",
 ) -> GenerationResponse:
@@ -81,8 +81,7 @@ async def create_generation(
         instruct: Natural language instruction used (if any)
         generation_id: Pre-assigned ID (for async generation flow)
         status: Generation status (generating, completed, failed)
-        engine: TTS engine used (qwen, luxtts, chatterbox, chatterbox_turbo)
-        model_size: Model size variant (1.7B, 0.6B) — only relevant for qwen
+        model_size: Reserved for compatibility.
         source: Origin marker stored on the row. ``"manual"`` for regular
             /generate calls; ``"personality_speak"`` for rows created
             by the /profiles/{id}/speak endpoint. Enables filtering the
@@ -100,7 +99,6 @@ async def create_generation(
         duration=duration,
         seed=seed,
         instruct=instruct,
-        engine=engine,
         model_size=model_size,
         status=status,
         source=source,
@@ -219,7 +217,7 @@ async def list_generations(
             duration=generation.duration,
             seed=generation.seed,
             instruct=generation.instruct,
-            engine=generation.engine or "indextts2",
+            engine="indextts2",
             model_size=generation.model_size,
             status=generation.status or "completed",
             error=generation.error,

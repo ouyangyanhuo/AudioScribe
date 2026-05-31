@@ -50,7 +50,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from urllib.parse import quote
 
 from . import __version__, database
-from .services import tts, transcribe, llm
+from .services import tts
 from .database import get_db
 from .utils.platform_detect import get_backend_type
 from .utils.progress import get_progress_manager
@@ -71,15 +71,6 @@ def safe_content_disposition(disposition_type: str, filename: str) -> str:
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    from .mcp_server.server import build_mcp_server, compose_lifespan
-    from .mcp_server.context import ClientIdMiddleware
-
-    # Build the MCP app up-front so we can wire its lifespan into FastAPI's —
-    # FastMCP's Streamable HTTP transport only works if its session manager
-    # runs inside the parent ASGI lifespan.
-    mcp = build_mcp_server()
-    mcp_app = mcp.http_app(path="/", transport="http")
-
     @asynccontextmanager
     async def voicebox_lifespan(app: FastAPI):
         await _run_startup(app)
@@ -91,26 +82,15 @@ def create_app() -> FastAPI:
             # startup still unloads whatever models were loaded.
             await _run_shutdown()
 
-    # compose_lifespan enters factories in order (voicebox startup →
-    # MCP startup) and exits in LIFO (MCP teardown first → models
-    # unload last). That ordering matters on shutdown: FastMCP's
-    # __aexit__ cancels in-flight session tasks, and we want that to
-    # happen *before* _run_shutdown yanks the TTS / Whisper / LLM
-    # models out from under any MCP request that was still generating.
-    lifespan = compose_lifespan(voicebox_lifespan, mcp_app.router.lifespan_context)
-
     application = FastAPI(
         title="voicebox API",
-        description="Production-quality Qwen3-TTS voice cloning API",
+        description="IndexTTS2 voice cloning API",
         version=__version__,
-        lifespan=lifespan,
+        lifespan=voicebox_lifespan,
     )
 
     _configure_cors(application)
-    application.add_middleware(ClientIdMiddleware)
     register_routers(application)
-    application.mount("/mcp", mcp_app)
-    logger.info("MCP: mounted at /mcp")
     _mount_frontend(application)
 
     return application
@@ -307,14 +287,6 @@ async def _run_shutdown() -> None:
         tts.unload_tts_model()
     except Exception:
         logger.exception("Failed to unload TTS model")
-    try:
-        transcribe.unload_whisper_model()
-    except Exception:
-        logger.exception("Failed to unload Whisper model")
-    try:
-        llm.unload_llm_model()
-    except Exception:
-        logger.exception("Failed to unload LLM model")
 
 
 app = create_app()

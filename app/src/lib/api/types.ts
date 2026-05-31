@@ -1,19 +1,15 @@
-// API Types matching backend Pydantic models
 import type { LanguageCode } from '@/lib/constants/languages';
 
-export type VoiceType = 'cloned' | 'preset' | 'designed';
+export interface EffectConfig {
+  type: string;
+  enabled: boolean;
+  params: Record<string, number>;
+}
 
 export interface VoiceProfileCreate {
   name: string;
   description?: string;
   language: LanguageCode;
-  voice_type?: VoiceType;
-  preset_engine?: string;
-  preset_voice_id?: string;
-  design_prompt?: string;
-  default_engine?: string;
-  /** Free-form character prompt used by compose and the `/generate` personality-rewrite path. */
-  personality?: string;
 }
 
 export interface VoiceProfileResponse {
@@ -23,29 +19,10 @@ export interface VoiceProfileResponse {
   language: string;
   avatar_path?: string;
   effects_chain?: EffectConfig[];
-  voice_type: VoiceType;
-  preset_engine?: string;
-  preset_voice_id?: string;
-  design_prompt?: string;
-  default_engine?: string;
-  personality?: string | null;
   generation_count: number;
   sample_count: number;
   created_at: string;
   updated_at: string;
-}
-
-/** Response returned by /profiles/{id}/compose. */
-export interface PersonalityTextResponse {
-  text: string;
-  model_size: string;
-}
-
-export interface PresetVoice {
-  voice_id: string;
-  name: string;
-  gender: 'male' | 'female';
-  language: string;
 }
 
 export interface ProfileSampleCreate {
@@ -57,12 +34,6 @@ export interface ProfileSampleResponse {
   profile_id: string;
   audio_path: string;
   reference_text: string;
-}
-
-export interface EffectConfig {
-  type: string;
-  enabled: boolean;
-  params: Record<string, number>;
 }
 
 export interface GenerationRequest {
@@ -88,8 +59,6 @@ export interface GenerationRequest {
   repetition_penalty?: number;
   max_mel_tokens?: number;
   instruct?: string;
-  /** When true and the profile has a personality prompt, input text is rewritten in-character before TTS. */
-  personality?: boolean;
   max_chunk_chars?: number;
   crossfade_ms?: number;
   normalize?: boolean;
@@ -135,118 +104,11 @@ export interface HistoryQuery {
 
 export interface HistoryResponse extends GenerationResponse {
   profile_name: string;
-  versions?: GenerationVersionResponse[];
-  active_version_id?: string;
 }
 
 export interface HistoryListResponse {
   items: HistoryResponse[];
   total: number;
-}
-
-export type WhisperModelSize = 'base' | 'small' | 'medium' | 'large' | 'turbo';
-
-export type Qwen3ModelSize = '0.6B' | '1.7B' | '4B';
-
-export type CaptureSource = 'dictation' | 'recording' | 'file';
-
-/**
- * Snapshot of the accessibility-focused UI element at chord-start. Emitted
- * from Rust as part of the ``dictate:start`` payload so the frontend can
- * pass it back to ``paste_final_text`` once the final text is ready.
- */
-export interface FocusSnapshot {
-  pid: number;
-  bundle_id: string | null;
-  role: string | null;
-}
-
-export interface RefinementFlags {
-  smart_cleanup: boolean;
-  self_correction: boolean;
-  preserve_technical: boolean;
-}
-
-export interface CaptureResponse {
-  id: string;
-  audio_path: string;
-  source: CaptureSource;
-  language?: string | null;
-  duration_ms?: number | null;
-  transcript_raw: string;
-  transcript_refined?: string | null;
-  stt_model?: string | null;
-  llm_model?: string | null;
-  refinement_flags?: RefinementFlags | null;
-  created_at: string;
-}
-
-export interface CaptureListResponse {
-  items: CaptureResponse[];
-  total: number;
-}
-
-/**
- * Response of ``POST /captures``. Adds ``auto_refine`` and ``allow_auto_paste``
- * — the server's current settings captured at request time — so the client
- * can decide whether to chain a refine call and whether to fire the
- * synthetic-paste pipeline without relying on its own (possibly stale) copy
- * of capture_settings.
- */
-export interface CaptureCreateResponse extends CaptureResponse {
-  auto_refine: boolean;
-  allow_auto_paste: boolean;
-}
-
-export interface CaptureRefineRequest {
-  flags?: RefinementFlags;
-  model_size?: Qwen3ModelSize;
-}
-
-export interface CaptureRetranscribeRequest {
-  model?: WhisperModelSize;
-  language?: LanguageCode;
-}
-
-export interface CaptureSettings {
-  stt_model: WhisperModelSize;
-  language: string;
-  auto_refine: boolean;
-  llm_model: Qwen3ModelSize;
-  smart_cleanup: boolean;
-  self_correction: boolean;
-  preserve_technical: boolean;
-  allow_auto_paste: boolean;
-  default_playback_voice_id: string | null;
-  /** Whether the global keyboard hotkey is armed. Off by default — turning
-   *  this on triggers the macOS Input Monitoring TCC prompt. */
-  hotkey_enabled: boolean;
-  /** keytap key names. Defaults are platform-specific right-hand modifiers. */
-  chord_push_to_talk_keys: string[];
-  /** keytap key names. Toggle adds Space to the platform-specific PTT chord. */
-  chord_toggle_to_talk_keys: string[];
-}
-
-export type CaptureSettingsUpdate = Partial<CaptureSettings>;
-
-/**
- * One row in the dictation readiness checklist. ``model_name`` is the
- * canonical id understood by ``POST /models/download`` so the UI can wire a
- * one-click "Download" button without a second lookup.
- */
-export interface ModelReadiness {
-  ready: boolean;
-  model_name: string;
-  display_name: string;
-  size: string;
-  size_mb?: number | null;
-}
-
-/** Backend half of the dictation readiness check. The frontend combines this
- *  with TCC permission state into the full checklist used by useDictationReadiness. */
-export interface CaptureReadinessResponse {
-  stt: ModelReadiness;
-  llm: ModelReadiness;
 }
 
 export interface GenerationSettings {
@@ -267,14 +129,18 @@ export interface DownloadSettings {
 
 export type DownloadSettingsUpdate = Partial<DownloadSettings>;
 
-export interface TranscriptionRequest {
-  language?: LanguageCode;
-  model?: WhisperModelSize;
-}
-
-export interface TranscriptionResponse {
-  text: string;
-  duration: number;
+export interface AudioLibraryItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  language?: string | null;
+  gender?: string | null;
+  style?: string | null;
+  tags: string[];
+  audio_path: string;
+  duration?: number | null;
+  source: 'default' | 'user';
+  created_at: string;
 }
 
 export interface HealthResponse {
@@ -286,7 +152,7 @@ export interface HealthResponse {
   gpu_type?: string;
   vram_used_mb?: number;
   backend_type?: string;
-  backend_variant?: string; // "cpu" or "cuda"
+  backend_variant?: string;
 }
 
 export interface CudaDownloadProgress {
@@ -301,10 +167,10 @@ export interface CudaDownloadProgress {
 }
 
 export interface CudaStatus {
-  available: boolean; // CUDA binary exists on disk
-  active: boolean; // Currently running the CUDA binary
+  available: boolean;
+  active: boolean;
   binary_path?: string;
-  downloading: boolean; // Download in progress
+  downloading: boolean;
   download_progress?: CudaDownloadProgress;
 }
 
@@ -322,9 +188,9 @@ export interface ModelProgress {
 export interface ModelStatus {
   model_name: string;
   display_name: string;
-  hf_repo_id?: string; // HuggingFace repository ID
+  hf_repo_id?: string;
   downloaded: boolean;
-  downloading: boolean; // True if download is in progress
+  downloading: boolean;
   size_mb?: number;
   loaded: boolean;
 }
@@ -358,10 +224,10 @@ export interface ActiveDownloadTask {
   status: string;
   started_at: string;
   error?: string;
-  progress?: number; // 0-100 percentage
-  current?: number; // bytes downloaded
-  total?: number; // total bytes
-  filename?: string; // current file being downloaded
+  progress?: number;
+  current?: number;
+  total?: number;
+  filename?: string;
 }
 
 export interface ActiveGenerationTask {
@@ -465,8 +331,6 @@ export interface StoryItemSplit {
   split_time_ms: number;
 }
 
-// Effects
-
 export interface EffectPresetResponse {
   id: string;
   name: string;
@@ -512,29 +376,4 @@ export interface ApplyEffectsRequest {
   source_version_id?: string;
   label?: string;
   set_as_default?: boolean;
-}
-
-/* ─── MCP ─────────────────────────────────────────────────────────────── */
-
-export interface MCPClientBinding {
-  client_id: string;
-  label: string | null;
-  profile_id: string | null;
-  default_engine: string | null;
-  default_personality: boolean;
-  last_seen_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface MCPClientBindingUpsert {
-  client_id: string;
-  label?: string | null;
-  profile_id?: string | null;
-  default_engine?: string | null;
-  default_personality?: boolean;
-}
-
-export interface MCPClientBindingListResponse {
-  items: MCPClientBinding[];
 }

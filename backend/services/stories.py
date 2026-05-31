@@ -70,7 +70,7 @@ def _build_item_detail(
         duration=generation.duration,
         seed=generation.seed,
         instruct=generation.instruct,
-        engine=generation.engine,
+        engine="indextts2",
         volume=getattr(item, "volume", 1.0),
         generation_created_at=generation.created_at,
         versions=versions,

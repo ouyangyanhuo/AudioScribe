@@ -23,18 +23,6 @@ MODELSCOPE = "modelscope"
 # ModelScope is selected.
 MODELSCOPE_MODEL_IDS: dict[str, str] = {
     "IndexTeam/IndexTTS-2": "IndexTeam/IndexTTS-2",
-    "Qwen/Qwen3-TTS-12Hz-1.7B-Base": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
-    "Qwen/Qwen3-TTS-12Hz-0.6B-Base": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
-    "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
-    "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
-    "Qwen/Qwen3-0.6B": "Qwen/Qwen3-0.6B",
-    "Qwen/Qwen3-1.7B": "Qwen/Qwen3-1.7B",
-    "Qwen/Qwen3-4B": "Qwen/Qwen3-4B",
-    "openai/whisper-base": "AI-ModelScope/whisper-base",
-    "openai/whisper-small": "AI-ModelScope/whisper-small",
-    "openai/whisper-medium": "AI-ModelScope/whisper-medium",
-    "openai/whisper-large-v3": "AI-ModelScope/whisper-large-v3",
-    "openai/whisper-large-v3-turbo": "AI-ModelScope/whisper-large-v3-turbo",
 }
 
 

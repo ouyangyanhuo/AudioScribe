@@ -33,7 +33,6 @@ const generationSchema = z.object({
   numBeams: z.number().int().min(1).max(10).optional(),
   repetitionPenalty: z.number().min(0).max(30).optional(),
   maxMelTokens: z.number().int().min(100).max(10000).optional(),
-  personality: z.boolean().optional(),
 });
 
 export type GenerationFormValues = z.infer<typeof generationSchema>;
@@ -82,7 +81,6 @@ export function useGenerationForm(options: UseGenerationFormOptions = {}) {
       numBeams: 3,
       repetitionPenalty: 10,
       maxMelTokens: 1500,
-      personality: false,
       ...options.defaultValues,
     },
   });
@@ -143,7 +141,6 @@ export function useGenerationForm(options: UseGenerationFormOptions = {}) {
         num_beams: data.numBeams,
         repetition_penalty: data.repetitionPenalty,
         max_mel_tokens: data.maxMelTokens,
-        personality: data.personality || undefined,
         max_chunk_chars: maxChunkChars,
         crossfade_ms: crossfadeMs,
         normalize: normalizeAudio,
@@ -176,7 +173,6 @@ export function useGenerationForm(options: UseGenerationFormOptions = {}) {
         numBeams: data.numBeams,
         repetitionPenalty: data.repetitionPenalty,
         maxMelTokens: data.maxMelTokens,
-        personality: data.personality,
       });
       options.onSuccess?.(result.id);
     } catch (error) {

@@ -288,7 +288,7 @@ export function SampleList({ profileId }: SampleListProps) {
                       <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <CircleButton
                           icon={Edit}
-                          title={t('sampleList.editTranscription')}
+                          title={t('sampleList.editReferenceText', { defaultValue: 'Edit reference text' })}
                           onClick={() => handleStartEdit(sample.id, sample.reference_text)}
                         />
                         <CircleButton

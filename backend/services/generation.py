@@ -155,17 +155,8 @@ async def run_generation(
 
 
 def _notify_speak_end(generation_id: str, *, status: str) -> None:
-    """Publish a speak-end event; the frontend ignores unknown ids."""
-    try:
-        from ..mcp_server import events as mcp_events
-
-        mcp_events.publish(
-            "speak-end",
-            {"generation_id": generation_id, "status": status},
-        )
-    except Exception:
-        # Never let event pub/sub break generation completion.
-        pass
+    """Compatibility no-op; MCP speak events were removed in the IndexTTS2 refactor."""
+    return None
 
 
 def _save_generate(

@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from .. import config, models
-from ..services import history, personality, profiles, tts
+from ..services import history, profiles, tts
 from ..database import Generation as DBGeneration, VoiceProfile as DBVoiceProfile, get_db
 from ..services.generation import run_generation
 from ..services.task_queue import cancel_generation as cancel_generation_job, enqueue_generation
@@ -41,7 +41,6 @@ def _get_or_create_import_profile(db: Session) -> DBVoiceProfile:
         name=IMPORTED_AUDIO_PROFILE_NAME,
         description="External audio imported into a story timeline.",
         language="en",
-        voice_type="import",
     )
     db.add(row)
     db.commit()
@@ -98,15 +97,6 @@ async def generate_speech(
 
     text = data.text
     source = "manual"
-    if data.personality and getattr(profile, "personality", None):
-        try:
-            llm_result = await personality.rewrite_as_profile(profile.personality, data.text)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        text = llm_result.text.strip()
-        if not text:
-            raise HTTPException(status_code=500, detail="LLM produced empty output; nothing to speak.")
-        source = "personality_speak"
 
     generation = await history.create_generation(
         profile_id=data.profile_id,
@@ -197,7 +187,7 @@ async def retry_generation(generation_id: str, db: Session = Depends(get_db)):
             profile_id=gen.profile_id,
             text=gen.text,
             language=gen.language,
-            engine=gen.engine or "indextts2",
+            engine="indextts2",
             model_size=gen.model_size or "default",
             seed=gen.seed,
             instruct=gen.instruct,
@@ -241,7 +231,7 @@ async def regenerate_generation(generation_id: str, db: Session = Depends(get_db
             profile_id=gen.profile_id,
             text=gen.text,
             language=gen.language,
-            engine=gen.engine or "indextts2",
+            engine="indextts2",
             model_size=gen.model_size or "default",
             seed=gen.seed,
             instruct=gen.instruct,
@@ -488,7 +478,7 @@ async def import_audio(
         db=db,
         generation_id=generation_id,
         status="completed",
-        engine="import",
+        engine="indextts2",
         model_size=None,
         source="import",
     )

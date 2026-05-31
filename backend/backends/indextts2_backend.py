@@ -157,7 +157,7 @@ class IndexTTS2Backend:
         if not result.get("ok"):
             raise RuntimeError(result.get("error") or "IndexTTS2 worker failed")
 
-        audio, sample_rate = load_audio(str(output_path), sr=None)
+        audio, sample_rate = load_audio(str(output_path), sample_rate=INDEXTTS2_SAMPLE_RATE)
         return np.asarray(audio, dtype=np.float32), int(sample_rate or INDEXTTS2_SAMPLE_RATE)
 
     def _run_worker(self, payload_path: Path, result_path: Path) -> None:

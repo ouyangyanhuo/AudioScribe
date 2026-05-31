@@ -1,8 +1,8 @@
-import type { LanguageCode } from '@/lib/constants/languages';
 import { useServerStore } from '@/stores/serverStore';
 import type {
   ActiveTasksResponse,
   ApplyEffectsRequest,
+  AudioLibraryItem,
   AvailableEffectsResponse,
   CudaStatus,
   EffectConfig,
@@ -17,8 +17,6 @@ import type {
   HistoryResponse,
   ModelDownloadRequest,
   ModelStatusListResponse,
-  PresetVoice,
-  PersonalityTextResponse,
   ProfileSampleResponse,
   StoryCreate,
   StoryDetailResponse,
@@ -32,26 +30,12 @@ import type {
   StoryItemVersionUpdate,
   StoryItemVolumeUpdate,
   StoryResponse,
-  TranscriptionResponse,
   VoiceProfileCreate,
   VoiceProfileResponse,
-  WhisperModelSize,
-  CaptureListResponse,
-  CaptureResponse,
-  CaptureCreateResponse,
-  CaptureReadinessResponse,
-  CaptureRefineRequest,
-  CaptureRetranscribeRequest,
-  CaptureSettings,
-  CaptureSettingsUpdate,
-  CaptureSource,
   GenerationSettings,
   GenerationSettingsUpdate,
   DownloadSettings,
   DownloadSettingsUpdate,
-  MCPClientBinding,
-  MCPClientBindingListResponse,
-  MCPClientBindingUpsert,
 } from './types';
 
 function formatErrorDetail(detail: unknown, fallback: string): string {
@@ -116,10 +100,6 @@ class ApiClient {
     return this.request<VoiceProfileResponse>(`/profiles/${profileId}`);
   }
 
-  async listPresetVoices(engine: string): Promise<{ engine: string; voices: PresetVoice[] }> {
-    return this.request<{ engine: string; voices: PresetVoice[] }>(`/profiles/presets/${engine}`);
-  }
-
   async updateProfile(profileId: string, data: VoiceProfileCreate): Promise<VoiceProfileResponse> {
     return this.request<VoiceProfileResponse>(`/profiles/${profileId}`, {
       method: 'PUT',
@@ -130,17 +110,6 @@ class ApiClient {
   async deleteProfile(profileId: string): Promise<void> {
     await this.request<void>(`/profiles/${profileId}`, {
       method: 'DELETE',
-    });
-  }
-
-  // ── Personality-driven text generation ─────────────────────────────
-  // Compose produces a fresh in-character utterance the UI drops into
-  // the generate textarea. Rewrite now happens server-side inside
-  // `/generate` when `personality: true` is passed in the request body.
-
-  async composeWithPersonality(profileId: string): Promise<PersonalityTextResponse> {
-    return this.request<PersonalityTextResponse>(`/profiles/${profileId}/compose`, {
-      method: 'POST',
     });
   }
 
@@ -393,119 +362,7 @@ class ApiClient {
     return `${this.getBaseUrl()}/samples/${sampleId}`;
   }
 
-  // Transcription
-  async transcribeAudio(
-    file: File,
-    language?: LanguageCode,
-    model?: WhisperModelSize,
-  ): Promise<TranscriptionResponse> {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (language) {
-      formData.append('language', language);
-    }
-    if (model) {
-      formData.append('model', model);
-    }
-
-    const url = `${this.getBaseUrl()}/transcribe`;
-    const response = await fetch(url, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({
-        detail: response.statusText,
-      }));
-      throw new Error(formatErrorDetail(error.detail, `HTTP error! status: ${response.status}`));
-    }
-
-    return response.json();
-  }
-
-  // Captures
-  async listCaptures(limit = 50, offset = 0): Promise<CaptureListResponse> {
-    return this.request<CaptureListResponse>(
-      `/captures?limit=${limit}&offset=${offset}`,
-    );
-  }
-
-  async getCapture(captureId: string): Promise<CaptureResponse> {
-    return this.request<CaptureResponse>(`/captures/${captureId}`);
-  }
-
-  async createCapture(
-    file: File,
-    options?: {
-      source?: CaptureSource;
-      language?: LanguageCode;
-      sttModel?: WhisperModelSize;
-    },
-  ): Promise<CaptureCreateResponse> {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('source', options?.source ?? 'file');
-    if (options?.language) formData.append('language', options.language);
-    if (options?.sttModel) formData.append('stt_model', options.sttModel);
-
-    const url = `${this.getBaseUrl()}/captures`;
-    const response = await fetch(url, { method: 'POST', body: formData });
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({
-        detail: response.statusText,
-      }));
-      throw new Error(formatErrorDetail(error.detail, `HTTP error! status: ${response.status}`));
-    }
-    return response.json();
-  }
-
-  async deleteCapture(captureId: string): Promise<{ message: string }> {
-    return this.request<{ message: string }>(`/captures/${captureId}`, {
-      method: 'DELETE',
-    });
-  }
-
-  async refineCapture(
-    captureId: string,
-    body: CaptureRefineRequest,
-  ): Promise<CaptureResponse> {
-    return this.request<CaptureResponse>(`/captures/${captureId}/refine`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-  }
-
-  async retranscribeCapture(
-    captureId: string,
-    body: CaptureRetranscribeRequest,
-  ): Promise<CaptureResponse> {
-    return this.request<CaptureResponse>(`/captures/${captureId}/retranscribe`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-  }
-
-  getCaptureAudioUrl(captureId: string): string {
-    return `${this.getBaseUrl()}/captures/${captureId}/audio`;
-  }
-
   // Settings
-  async getCaptureSettings(): Promise<CaptureSettings> {
-    return this.request<CaptureSettings>('/settings/captures');
-  }
-
-  async getCaptureReadiness(): Promise<CaptureReadinessResponse> {
-    return this.request<CaptureReadinessResponse>('/capture/readiness');
-  }
-
-  async updateCaptureSettings(patch: CaptureSettingsUpdate): Promise<CaptureSettings> {
-    return this.request<CaptureSettings>('/settings/captures', {
-      method: 'PUT',
-      body: JSON.stringify(patch),
-    });
-  }
-
   async getGenerationSettings(): Promise<GenerationSettings> {
     return this.request<GenerationSettings>('/settings/generation');
   }
@@ -530,25 +387,66 @@ class ApiClient {
     });
   }
 
-  // MCP bindings — per-MCP-client voice/engine/personality mapping.
-  async listMCPBindings(): Promise<MCPClientBindingListResponse> {
-    return this.request<MCPClientBindingListResponse>('/mcp/bindings');
+  async listAudioLibrary(filters?: {
+    language?: string;
+    gender?: string;
+    style?: string;
+    q?: string;
+  }): Promise<AudioLibraryItem[]> {
+    const params = new URLSearchParams();
+    if (filters?.language) params.set('language', filters.language);
+    if (filters?.gender) params.set('gender', filters.gender);
+    if (filters?.style) params.set('style', filters.style);
+    if (filters?.q) params.set('q', filters.q);
+    const query = params.toString();
+    return this.request<AudioLibraryItem[]>(`/audio-library${query ? `?${query}` : ''}`);
   }
 
-  async upsertMCPBinding(
-    data: MCPClientBindingUpsert,
-  ): Promise<MCPClientBinding> {
-    return this.request<MCPClientBinding>('/mcp/bindings', {
-      method: 'PUT',
-      body: JSON.stringify(data),
+  getAudioLibraryUrl(itemId: string): string {
+    return `${this.getBaseUrl()}/audio-library/${itemId}/audio`;
+  }
+
+  async uploadAudioLibraryItem(data: {
+    file: File;
+    name: string;
+    description?: string;
+    language?: string;
+    gender?: string;
+    style?: string;
+    tags?: string[];
+  }): Promise<AudioLibraryItem> {
+    const formData = new FormData();
+    formData.append('file', data.file);
+    formData.append('name', data.name);
+    if (data.description) formData.append('description', data.description);
+    if (data.language) formData.append('language', data.language);
+    if (data.gender) formData.append('gender', data.gender);
+    if (data.style) formData.append('style', data.style);
+    if (data.tags?.length) formData.append('tags', data.tags.join(','));
+    const response = await fetch(`${this.getBaseUrl()}/audio-library`, {
+      method: 'POST',
+      body: formData,
     });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(formatErrorDetail(error.detail, `HTTP error! status: ${response.status}`));
+    }
+    return response.json();
   }
 
-  async deleteMCPBinding(clientId: string): Promise<{ deleted: string }> {
-    return this.request<{ deleted: string }>(
-      `/mcp/bindings/${encodeURIComponent(clientId)}`,
-      { method: 'DELETE' },
-    );
+  async deleteAudioLibraryItem(itemId: string): Promise<void> {
+    await this.request<void>(`/audio-library/${itemId}`, { method: 'DELETE' });
+  }
+
+  async useAudioLibraryAsSample(
+    itemId: string,
+    profileId: string,
+    referenceText: string,
+  ): Promise<AudioLibraryItem> {
+    return this.request<AudioLibraryItem>(`/audio-library/${itemId}/use-as-sample/${profileId}`, {
+      method: 'POST',
+      body: JSON.stringify({ reference_text: referenceText }),
+    });
   }
 
   // Model Management
