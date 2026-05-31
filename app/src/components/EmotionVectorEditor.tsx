@@ -1,6 +1,17 @@
 import type { EmotionVector } from '../shared/types';
+import { useI18n } from '../shared/i18n';
+import type { TranslationKey } from '../shared/i18n';
 
-const labels = ['Happy', 'Angry', 'Sad', 'Afraid', 'Disgust', 'Melancholy', 'Surprise', 'Calm'];
+const labelKeys: TranslationKey[] = [
+  'emotionHappy',
+  'emotionAngry',
+  'emotionSad',
+  'emotionAfraid',
+  'emotionDisgust',
+  'emotionMelancholy',
+  'emotionSurprise',
+  'emotionCalm',
+];
 
 export function EmotionVectorEditor({
   value,
@@ -9,11 +20,13 @@ export function EmotionVectorEditor({
   value: EmotionVector;
   onChange: (value: EmotionVector) => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <div className="emotion-grid">
-      {labels.map((label, index) => (
-        <label key={label} className="range-row">
-          <span>{label}</span>
+      {labelKeys.map((key, index) => (
+        <label key={key} className="range-row">
+          <span>{t(key)}</span>
           <input
             type="range"
             min="0"

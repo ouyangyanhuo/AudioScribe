@@ -4,11 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "tsc -p tsconfig.json && vite build",
+    "dev": "bun node_modules/vite/bin/vite.js",
+    "typecheck": "bun node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
+    "build": "bun node_modules/typescript/bin/tsc -p tsconfig.json && bun node_modules/vite/bin/vite.js build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "bun node_modules/@tauri-apps/cli/tauri.js"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

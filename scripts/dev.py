@@ -93,10 +93,16 @@ def frontend_script_command(script: str, args: list[str] | None = None) -> list[
     return [bun_command(), "run", script, *script_args]
 
 
+def tauri_command(args: list[str]) -> list[str]:
+    return [bun_command(), str(APP / "node_modules" / "@tauri-apps" / "cli" / "tauri.js"), *args]
+
+
 def local_tool_env() -> dict[str, str]:
     env = os.environ.copy()
     env["PIP_CACHE_DIR"] = str(LOCAL_CACHE / "pip")
     env["BUN_INSTALL_CACHE_DIR"] = str(LOCAL_CACHE / "bun")
+    env["TEMP"] = str(LOCAL_CACHE / "tmp")
+    env["TMP"] = str(LOCAL_CACHE / "tmp")
     return env
 
 
@@ -128,6 +134,7 @@ def ensure_frontend_env() -> None:
     if vite_bin.exists():
         return
     (LOCAL_CACHE / "bun").mkdir(parents=True, exist_ok=True)
+    (LOCAL_CACHE / "tmp").mkdir(parents=True, exist_ok=True)
     print("[dev] Installing frontend dependencies with bun", flush=True)
     run(frontend_install_command(), cwd=APP, env=local_tool_env())
 
@@ -136,6 +143,9 @@ def dev_env() -> dict[str, str]:
     env = os.environ.copy()
     env["BUN_INSTALL_CACHE_DIR"] = str(LOCAL_CACHE / "bun")
     env["PIP_CACHE_DIR"] = str(LOCAL_CACHE / "pip")
+    env["TEMP"] = str(LOCAL_CACHE / "tmp")
+    env["TMP"] = str(LOCAL_CACHE / "tmp")
+    Path(env["TEMP"]).mkdir(parents=True, exist_ok=True)
     env["VOICEBOX_INSTALL_DIR"] = str(ROOT)
     env["VITE_API_BASE_URL"] = f"http://127.0.0.1:{BACKEND_PORT}"
     env["PYTHONUNBUFFERED"] = "1"
@@ -156,6 +166,8 @@ def start_backend(python: Path) -> subprocess.Popen:
         "voicebox.app:create_app",
         "--factory",
         "--app-dir",
+        str(BACKEND),
+        "--reload-dir",
         str(BACKEND),
         "--host",
         "127.0.0.1",
@@ -191,7 +203,7 @@ def wait_for_backend(process: subprocess.Popen) -> None:
 def frontend_command() -> list[str]:
     if command_exists("cargo"):
         print("[dev] Cargo found; starting Tauri desktop app", flush=True)
-        return frontend_script_command("tauri", ["dev"])
+        return tauri_command(["dev"])
     print("[dev] Cargo not found; starting Vite web UI instead", flush=True)
     print(f"[dev] Open http://127.0.0.1:{FRONTEND_PORT}", flush=True)
     return frontend_script_command("dev", ["--host", "127.0.0.1"])

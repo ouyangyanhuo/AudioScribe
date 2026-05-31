@@ -6,7 +6,7 @@ export type Locale = 'zh' | 'en';
 
 const resources = { zh, en };
 
-type TranslationKey = keyof typeof zh;
+export type TranslationKey = keyof typeof zh;
 
 type LanguageContextValue = {
   locale: Locale;

@@ -2,14 +2,17 @@ import {
   AudioLines,
   BookOpen,
   Library,
+  Moon,
   Settings,
   SlidersHorizontal,
   Sparkles,
+  Sun,
   Users,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { SectionId } from './shared/types';
 import { useI18n } from './shared/i18n';
+import { useTheme } from './shared/theme';
 import { SingleGenerationPage } from './pages/SingleGenerationPage';
 import { StoriesPage } from './pages/StoriesPage';
 import { RolesPage } from './pages/RolesPage';
@@ -29,6 +32,7 @@ const navItems = [
 export function App() {
   const [section, setSection] = useState<SectionId>('single');
   const { t, locale, setLocale } = useI18n();
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <div className="app-shell">
@@ -61,6 +65,10 @@ export function App() {
         </nav>
 
         <div className="sidebar-footer">
+          <button className="theme-toggle" onClick={toggleTheme}>
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            <span>{theme === 'dark' ? t('themeLight') : t('themeDark')}</span>
+          </button>
           <label>{t('language')}</label>
           <div className="segmented">
             <button className={locale === 'zh' ? 'selected' : ''} onClick={() => setLocale('zh')}>
