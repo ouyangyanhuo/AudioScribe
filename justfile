@@ -24,6 +24,10 @@ check:
 setup-indextts2:
     python scripts/setup_indextts2.py
 
+# Install CUDA-enabled PyTorch into the isolated IndexTTS2 worker runtime.
+setup-gpu:
+    python scripts/setup_gpu.py
+
 # Build backend sidecar and Tauri desktop bundle.
 build:
     python scripts/build.py

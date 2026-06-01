@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -27,38 +28,31 @@ class WorkerGenerateRequest:
     settings: dict = field(default_factory=dict)
 
 
+_TTS = None
+_TTS_KEY: tuple[str, str, str, bool, bool, bool] | None = None
+_TTS_LOCK = threading.Lock()
+
+
 def create_app():
-    from fastapi import FastAPI
-    from pydantic import BaseModel, Field
+    from fastapi import Body, FastAPI
 
     app = FastAPI(title="AudioScribe IndexTTS2 Worker")
 
-    class WorkerGenerateHttpRequest(BaseModel):
-        install_dir: str
-        cache_dir: str
-        model_dir: str
-        cfg_path: str
-        speaker_audio: str
-        text: str
-        output_path: str
-        emo_audio_prompt: str | None = None
-        emo_alpha: float = 1.0
-        emo_vector: list[float] | None = None
-        use_emo_text: bool = False
-        emo_text: str | None = None
-        use_random: bool = False
-        interval_silence: int = 200
-        max_text_tokens_per_segment: int = 120
-        settings: dict = Field(default_factory=dict)
-
     @app.get("/health")
-    def health() -> dict[str, str]:
-        return {"status": "healthy", "engine": "indextts2", "state": "ready"}
+    def health() -> dict[str, object]:
+        return {
+            "status": "healthy",
+            "engine": "indextts2",
+            "worker_protocol": 2,
+            "state": "ready",
+            "model_loaded": _TTS is not None,
+        }
 
     @app.post("/generate")
-    def generate(payload: WorkerGenerateHttpRequest) -> dict[str, str]:
-        run_generation(WorkerGenerateRequest(**payload.model_dump()))
-        return {"status": "completed", "output_path": payload.output_path}
+    def generate(payload: dict = Body(...)) -> dict[str, str]:
+        request = WorkerGenerateRequest(**payload)
+        run_generation(request)
+        return {"status": "completed", "output_path": request.output_path}
 
     return app
 
@@ -94,11 +88,8 @@ def _patch_huggingface_cache(cache_dir: Path) -> None:
         pass
 
 
-def run_generation(payload: WorkerGenerateRequest) -> None:
-    install_dir = Path(payload.install_dir).resolve()
-    cache_dir = Path(payload.cache_dir).resolve()
-    model_dir = Path(payload.model_dir).resolve()
-    _force_install_local_env(install_dir, cache_dir, model_dir)
+def _get_tts(payload: WorkerGenerateRequest, cache_dir: Path):
+    global _TTS, _TTS_KEY
 
     # Import after forcing env. infer_v2 currently sets HF_HUB_CACHE internally,
     # so patch huggingface constants again immediately after import.
@@ -107,15 +98,54 @@ def run_generation(payload: WorkerGenerateRequest) -> None:
     _patch_huggingface_cache(cache_dir)
 
     settings = payload.settings or {}
+    if settings.get("use_deepspeed", False) and os.name == "nt":
+        raise RuntimeError("DeepSpeed is not supported on native Windows. Use CUDA PyTorch acceleration instead.")
+
     device = "cuda:0" if settings.get("gpu_mode") == "cuda" else "cpu"
-    tts = IndexTTS2(
-        cfg_path=payload.cfg_path,
-        model_dir=payload.model_dir,
-        device=device,
-        use_fp16=bool(settings.get("use_fp16", False)),
-        use_cuda_kernel=bool(settings.get("use_cuda_kernel", False)),
-        use_deepspeed=bool(settings.get("use_deepspeed", False)),
+    if settings.get("gpu_mode") == "cuda":
+        import torch
+
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA mode is enabled, but worker PyTorch cannot access CUDA.")
+
+    key = (
+        str(Path(payload.cfg_path).resolve()),
+        str(Path(payload.model_dir).resolve()),
+        device,
+        bool(settings.get("use_fp16", False)),
+        bool(settings.get("use_cuda_kernel", False)),
+        bool(settings.get("use_deepspeed", False)),
     )
+    with _TTS_LOCK:
+        if _TTS is None or _TTS_KEY != key:
+            _TTS = IndexTTS2(
+                cfg_path=payload.cfg_path,
+                model_dir=payload.model_dir,
+                device=device,
+                use_fp16=bool(settings.get("use_fp16", False)),
+                use_cuda_kernel=bool(settings.get("use_cuda_kernel", False)),
+                use_deepspeed=bool(settings.get("use_deepspeed", False)),
+            )
+            _TTS_KEY = key
+        return _TTS
+
+
+def run_generation(payload: WorkerGenerateRequest) -> None:
+    install_dir = Path(payload.install_dir).resolve()
+    cache_dir = Path(payload.cache_dir).resolve()
+    model_dir = Path(payload.model_dir).resolve()
+    _force_install_local_env(install_dir, cache_dir, model_dir)
+
+    import numpy as np
+
+    major = int(np.__version__.split(".", 1)[0])
+    if major >= 2:
+        raise RuntimeError(
+            f"IndexTTS2 worker has NumPy {np.__version__}, but this runtime requires numpy<2. "
+            "Open Settings and reinstall the IndexTTS2 CPU or CUDA runtime."
+        )
+
+    tts = _get_tts(payload, cache_dir)
     result = tts.infer(
         spk_audio_prompt=payload.speaker_audio,
         text=payload.text,
@@ -148,7 +178,7 @@ def main() -> int:
         uvicorn.run(
             create_app(),
             host="127.0.0.1",
-            port=int(os.environ.get("AUDIOSCRIBE_INDEXTTS2_PORT", "17494")),
+            port=int(os.environ.get("AUDIOSCRIBE_INDEXTTS2_PORT", "17495")),
         )
         return 0
 

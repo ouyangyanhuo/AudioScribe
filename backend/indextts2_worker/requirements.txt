@@ -1,4 +1,7 @@
-# Placeholder pins. Final versions must come from the dependency audit.
+# IndexTTS2 imports matplotlib/bigvgan extensions that are not reliably
+# NumPy 2-ready on Windows. Keep worker runtime on NumPy 1.x.
+numpy>=1.26,<2
+matplotlib>=3.8,<3.9
 modelscope>=1.20
 torch==2.8.*
 transformers==4.52.1

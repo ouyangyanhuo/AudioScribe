@@ -4,7 +4,7 @@ import uuid
 
 import json
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Body, Request
 
 from ..database import connect
 from ..schemas import EmotionPresetCreate, EmotionPresetResponse
@@ -30,7 +30,7 @@ def list_presets(request: Request) -> list[EmotionPresetResponse]:
 
 
 @router.post("", response_model=EmotionPresetResponse)
-def create_preset(request: Request, payload: EmotionPresetCreate) -> EmotionPresetResponse:
+def create_preset(request: Request, payload: EmotionPresetCreate = Body(...)) -> EmotionPresetResponse:
     preset_id = str(uuid.uuid4())
     with connect(request.app.state.paths.database_path) as conn:
         conn.execute(

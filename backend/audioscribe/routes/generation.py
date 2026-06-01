@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Request
 from fastapi.responses import FileResponse
 
 from ..database import connect
@@ -14,7 +14,11 @@ router = APIRouter()
 
 
 @router.post("", response_model=GenerationResponse)
-def generate(request: Request, payload: GenerationRequest, background_tasks: BackgroundTasks) -> GenerationResponse:
+def generate(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    payload: GenerationRequest = Body(...),
+) -> GenerationResponse:
     paths = request.app.state.paths
     try:
         speaker_audio = resolve_reference_audio(paths, payload)

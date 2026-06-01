@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Body, Request
 
 from ..database import connect
 from ..schemas import RoleCreate, RoleResponse
@@ -40,7 +40,7 @@ def list_roles(request: Request) -> list[RoleResponse]:
 
 
 @router.post("", response_model=RoleResponse)
-def create_role(request: Request, payload: RoleCreate) -> RoleResponse:
+def create_role(request: Request, payload: RoleCreate = Body(...)) -> RoleResponse:
     role_id = str(uuid.uuid4())
     with connect(request.app.state.paths.database_path) as conn:
         conn.execute(

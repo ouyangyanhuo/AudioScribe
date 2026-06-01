@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Body, Request
 
 from ..database import connect
 from ..schemas import StoryCreate, StoryResponse
@@ -34,7 +34,7 @@ def list_stories(request: Request) -> list[StoryResponse]:
 
 
 @router.post("", response_model=StoryResponse)
-def create_story(request: Request, payload: StoryCreate) -> StoryResponse:
+def create_story(request: Request, payload: StoryCreate = Body(...)) -> StoryResponse:
     story_id = str(uuid.uuid4())
     with connect(request.app.state.paths.database_path) as conn:
         conn.execute(

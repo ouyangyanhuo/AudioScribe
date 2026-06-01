@@ -15,6 +15,7 @@ APP = ROOT / "app"
 BACKEND = ROOT / "backend"
 TAURI = APP / "src-tauri"
 BINARIES = TAURI / "binaries"
+RESOURCES = TAURI / "resources"
 BUILD = ROOT / "build"
 PYINSTALLER = BUILD / "pyinstaller"
 TARGET_TRIPLE = "x86_64-pc-windows-msvc" if os.name == "nt" else ""
@@ -101,12 +102,33 @@ def build_frontend() -> None:
     run(dev.frontend_script_command("build"), cwd=APP, env=dev.local_tool_env())
 
 
+def prepare_runtime_resources() -> None:
+    worker_source = BACKEND / "indextts2_worker"
+    worker_target = RESOURCES / "backend" / "indextts2_worker"
+    if worker_target.exists():
+        shutil.rmtree(worker_target)
+    worker_target.mkdir(parents=True, exist_ok=True)
+    for name in ("worker.py", "requirements.txt", "README.md"):
+        source = worker_source / name
+        if source.exists():
+            shutil.copy2(source, worker_target / name)
+
+    runtime_source = ROOT / "runtime"
+    runtime_target = RESOURCES / "runtime"
+    if runtime_source.exists():
+        if runtime_target.exists():
+            shutil.rmtree(runtime_target)
+        shutil.copytree(runtime_source, runtime_target)
+
+
 def build_tauri() -> None:
+    prepare_runtime_resources()
     env = dev.dev_env()
     env["TAURI_CONFIG"] = json.dumps(
         {
             "bundle": {
                 "externalBin": ["binaries/audioscribe-backend"],
+                "resources": ["resources", "../../preset-voices"],
             }
         }
     )

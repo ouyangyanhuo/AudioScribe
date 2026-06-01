@@ -53,6 +53,11 @@ class InstallStatus(BaseModel):
     done: bool = False
 
 
+class RuntimeInstallRequest(BaseModel):
+    variant: Literal["cpu", "cuda"] = "cpu"
+    cuda_channel: Literal["cu121", "cu124", "cu126"] = "cu124"
+
+
 class SettingsResponse(BaseModel):
     model_source: Literal["modelscope", "huggingface"] = "modelscope"
     github_mirror_enabled: bool = False
@@ -62,7 +67,16 @@ class SettingsResponse(BaseModel):
     use_deepspeed: bool = False
     paths: RuntimePathSummary | None = None
     cuda_available: bool = False
+    cuda_runtime_installed: bool = False
+    cuda_device_name: str | None = None
+    cuda_torch_version: str | None = None
+    cuda_version: str | None = None
     deepspeed_available: bool = False
+    deepspeed_supported: bool = False
+    worker_runtime_installed: bool = False
+    worker_python: str | None = None
+    worker_numpy_version: str | None = None
+    gpu_message: str | None = None
     install_status: InstallStatus | None = None
 
 

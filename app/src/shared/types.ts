@@ -91,6 +91,15 @@ export type SettingsResponse = {
   use_cuda_kernel: boolean;
   use_deepspeed: boolean;
   cuda_available: boolean;
+  cuda_runtime_installed: boolean;
+  cuda_device_name?: string | null;
+  cuda_torch_version?: string | null;
+  cuda_version?: string | null;
   deepspeed_available: boolean;
+  deepspeed_supported: boolean;
+  worker_runtime_installed: boolean;
+  worker_python?: string | null;
+  worker_numpy_version?: string | null;
+  gpu_message?: string | null;
   install_status?: InstallStatus | null;
 };

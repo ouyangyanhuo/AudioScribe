@@ -547,6 +547,33 @@ input[type="range"] {
   flex: 1;
 }
 
+.settings-gpu-details {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.settings-success {
+  color: #8fd7a4 !important;
+}
+
+.settings-gpu-options {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.settings-gpu-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 12px;
+  flex-wrap: wrap;
+}
+
 .settings-install-btn {
   flex-shrink: 0;
   height: 32px;

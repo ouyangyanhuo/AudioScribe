@@ -32,14 +32,17 @@ export function SettingsPage() {
     void refreshSettings();
   }, [refreshSettings]);
 
-  const updateGpuMode = useCallback(async (mode: 'cpu' | 'cuda') => {
+  const updateSettings = useCallback(async (patch: Partial<SettingsResponse>) => {
     try {
-      const data = await apiPut<SettingsResponse>('/settings', { gpu_mode: mode });
+      const data = await apiPut<SettingsResponse>('/settings', patch);
       setSettings(data);
-    } catch {
-      // ignore
+    } catch (error) {
+      setSettings((current) => current ? {
+        ...current,
+        gpu_message: error instanceof Error ? error.message : t('installFailed'),
+      } : current);
     }
-  }, []);
+  }, [t]);
 
   const formatBytes = (value?: number | null) => {
     if (!value || value <= 0) return '0 B';
@@ -56,8 +59,12 @@ export function SettingsPage() {
 
   const cudaAvailable = settings?.cuda_available ?? false;
   const deepspeedAvailable = settings?.deepspeed_available ?? false;
+  const deepspeedSupported = settings?.deepspeed_supported ?? false;
   const installStatus = settings?.install_status ?? null;
   const installing = installStatus?.installing ?? false;
+  const gpuMessage = settings?.gpu_message ?? null;
+  const workerRuntimeInstalled = settings?.worker_runtime_installed ?? false;
+  const cudaRuntimeInstalled = settings?.cuda_runtime_installed ?? false;
 
   // Poll settings during installation
   useEffect(() => {
@@ -195,44 +202,140 @@ export function SettingsPage() {
 
         {/* ── GPU & Options ── */}
         <Panel title={t('gpuMode')}>
+          <p className="notice">{t('gpuRecommended')}</p>
+          <div className="settings-status-bar">
+            <div className="settings-status-icon">
+              <HardDrive size={20} />
+            </div>
+            <div className="settings-status-info">
+              <strong>{t('workerRuntime')}</strong>
+              <span className="settings-status-text">
+                {workerRuntimeInstalled ? t('workerRuntimeReady') : t('workerRuntimeMissing')}
+              </span>
+            </div>
+          </div>
+          <div className="settings-gpu-actions">
+            <button
+              className="toolbar-button settings-install-btn"
+              onClick={() => { void apiPost('/settings/install-runtime/cpu', {}).then(() => refreshSettings()); }}
+              disabled={installing}
+            >
+              {installing ? t('installing') : t('installCpuRuntime')}
+            </button>
+            <button
+              className="primary-button settings-install-btn"
+              onClick={() => { void apiPost('/settings/install-runtime/cuda', {}).then(() => refreshSettings()); }}
+              disabled={installing}
+            >
+              {installing ? t('installing') : t('installCudaRuntime')}
+            </button>
+            {cudaRuntimeInstalled && (
+              <button
+                className="danger-button settings-install-btn"
+                onClick={() => { void apiPost('/settings/uninstall-cuda', {}).then(() => refreshSettings()); }}
+                disabled={installing}
+              >
+                {installing ? t('installing') : t('uninstallCudaRuntime')}
+              </button>
+            )}
+          </div>
+          {settings?.worker_python && (
+            <div className="settings-gpu-details">
+              <span>{t('workerPython').replace('{path}', settings.worker_python)}</span>
+              {settings.worker_numpy_version && (
+                <span>{t('workerNumpy').replace('{version}', settings.worker_numpy_version)}</span>
+              )}
+            </div>
+          )}
           <label className="field">
             <span>{t('gpuMode')}</span>
             <Select
               value={settings?.gpu_mode ?? 'cpu'}
-              onChange={(v) => void updateGpuMode(v as 'cpu' | 'cuda')}
+              onChange={(v) => void updateSettings({ gpu_mode: v as 'cpu' | 'cuda' })}
               disabled={!cudaAvailable}
               options={[
                 { value: 'cpu', label: t('cpuMode') },
                 { value: 'cuda', label: t('cudaMode') },
               ]}
             />
+            {cudaAvailable && (
+              <div className="settings-gpu-details">
+                <span className="settings-success">{t('cudaAvailable')}</span>
+                {cudaRuntimeInstalled && (
+                  <span className="settings-success">{t('cudaRuntimeInstalled')}</span>
+                )}
+                {settings?.cuda_device_name && (
+                  <span>{t('cudaDevice').replace('{device}', settings.cuda_device_name)}</span>
+                )}
+                {(settings?.cuda_torch_version || settings?.cuda_version) && (
+                  <span>
+                    {t('cudaTorchVersion')
+                      .replace('{torch}', settings.cuda_torch_version ?? '-')
+                      .replace('{cuda}', settings.cuda_version ?? '-')}
+                  </span>
+                )}
+              </div>
+            )}
             {!cudaAvailable && (
               <div className="settings-hint-row">
                 <span className="settings-hint">{t('cudaUnavailable')}</span>
                 <button
                   className="toolbar-button settings-install-btn"
-                  onClick={() => { void apiPost('/settings/install-cuda-torch', {}).then(() => refreshSettings()); }}
+                  onClick={() => { void apiPost('/settings/install-runtime/cuda', {}).then(() => refreshSettings()); }}
                   disabled={installing}
                 >
-                  {installing ? t('installing') : t('installCudaTorch')}
+                  {installing ? t('installing') : t('installCudaRuntime')}
                 </button>
               </div>
             )}
           </label>
 
-          {!deepspeedAvailable && (
-            <div className="field">
-              <span>{t('deepspeedLabel')}</span>
+          {cudaAvailable && (
+            <div className="settings-gpu-options">
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={settings?.use_fp16 ?? false}
+                  onChange={(event) => void updateSettings({ use_fp16: event.target.checked })}
+                />
+                <span>{t('fp16Mode')}</span>
+              </label>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={settings?.use_cuda_kernel ?? false}
+                  onChange={(event) => void updateSettings({ use_cuda_kernel: event.target.checked })}
+                />
+                <span>{t('cudaKernelMode')}</span>
+              </label>
+            </div>
+          )}
+
+          <div className="field">
+            <span>{t('deepspeedLabel')}</span>
+            {deepspeedSupported ? (
               <div className="settings-hint-row">
-                <span className="settings-hint">{t('deepspeedUnavailable')}</span>
-                <button
-                  className="toolbar-button settings-install-btn"
-                  onClick={() => { void apiPost('/settings/install-deepspeed', {}).then(() => refreshSettings()); }}
-                  disabled={installing}
-                >
-                  {installing ? t('installing') : t('installDeepSpeed')}
-                </button>
+                <span className="settings-hint">
+                  {deepspeedAvailable ? t('cudaAvailable') : t('deepspeedUnavailable')}
+                </span>
+                {!deepspeedAvailable && (
+                  <button
+                    className="toolbar-button settings-install-btn"
+                    onClick={() => { void apiPost('/settings/install-deepspeed', {}).then(() => refreshSettings()); }}
+                    disabled={installing}
+                  >
+                    {installing ? t('installing') : t('installDeepSpeed')}
+                  </button>
+                )}
               </div>
+            ) : (
+              <span className="settings-hint">{t('deepspeedWindowsBlocked')}</span>
+            )}
+          </div>
+
+          {gpuMessage && (
+            <div className="settings-install-status error">
+              <span>{gpuMessage}</span>
             </div>
           )}
 

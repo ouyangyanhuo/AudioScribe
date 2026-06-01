@@ -19,7 +19,7 @@
     "active": true,
     "targets": "all",
     "icon": ["icons/icon.ico"],
-    "resources": ["../../preset-voices"],
+    "resources": ["resources", "../../preset-voices"],
     "windows": {
       "nsis": {
         "installerHooks": "nsis/custom.nsh"
